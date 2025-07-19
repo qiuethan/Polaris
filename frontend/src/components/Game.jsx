@@ -136,7 +136,7 @@ const unifiedKeyboardMap = [
   { name: "p2_crouch", keys: ["Slash"] },
 ];
 
-export default function Game() {
+export default function Game({ containerSize }) {
   const { physicsDebug, controlMode, showPoseDebug } = useControls("Map & Debug", {
     physicsDebug: { value: false },
     controlMode: {
@@ -154,7 +154,18 @@ export default function Game() {
 
   return (
     <PoseWebSocketProvider>
-      <div className="w-full h-screen flex bg-black">
+      <div 
+        className="flex bg-black"
+        style={containerSize ? {
+          width: containerSize.width,
+          height: containerSize.height,
+          position: 'relative',
+          overflow: 'hidden'
+        } : {
+          width: '100%',
+          height: '100%'
+        }}
+      >
         {/* Player 1 View - Left Side */}
         <div className="relative w-1/2 h-full">
           <KeyboardControls map={unifiedKeyboardMap}>
@@ -162,6 +173,8 @@ export default function Game() {
               shadows
               camera={{ position: [2, 1.5, -2], near: 0.01, fov: 60 }}
               gl={{ antialias: true }}
+              style={{ width: '100%', height: '100%' }}
+              resize={{ scroll: false, debounce: { scroll: 0, resize: 0 } }}
             >
               <Suspense fallback={null}>
                 <Physics debug={physicsDebug} gravity={[0, -30, 0]}>
@@ -173,7 +186,10 @@ export default function Game() {
           
           {/* Player 1 Minimap */}
           <div className="absolute w-48 h-48 top-4 left-4 shadow-2xl border-2 border-white rounded-lg overflow-hidden">
-            <Canvas gl={{ antialias: false }}>
+            <Canvas 
+              gl={{ antialias: false }}
+              style={{ width: '100%', height: '100%' }}
+            >
               <Minimap playerId="player1" />
             </Canvas>
           </div>
@@ -199,6 +215,8 @@ export default function Game() {
               shadows
               camera={{ position: [2, 1.5, -2], near: 0.01, fov: 60 }}
               gl={{ antialias: true }}
+              style={{ width: '100%', height: '100%' }}
+              resize={{ scroll: false, debounce: { scroll: 0, resize: 0 } }}
             >
               <Suspense fallback={null}>
                 <Physics debug={physicsDebug} gravity={[0, -30, 0]}>
@@ -210,7 +228,10 @@ export default function Game() {
           
           {/* Player 2 Minimap */}
           <div className="absolute w-48 h-48 top-4 right-4 shadow-2xl border-2 border-white rounded-lg overflow-hidden">
-            <Canvas gl={{ antialias: false }}>
+            <Canvas 
+              gl={{ antialias: false }}
+              style={{ width: '100%', height: '100%' }}
+            >
               <Minimap playerId="player2" />
             </Canvas>
           </div>
