@@ -32,17 +32,16 @@ class DualPoseTracker:
         self.angle_extractor_right = JointAngleFeatureExtractor()
     
     def draw_angle_info(self, frame, angles, side="left"):
-        """Draw joint angle information on the frame"""
-        if not angles:
-            return
+        """Draw joint angle information on the frame - only shows detected angles"""
         
-        # Choose color and position based on side
-        color = (0, 255, 255)  # Yellow text
+        # Choose color and position based on side  
+        valid_color = (255, 0, 0)  # Pure blue for valid angles (BGR format)
+        missing_color = (80, 80, 80)  # Dark gray for missing angles
         start_y = 50
         x_offset = 10 if side == "left" else frame.shape[1] - 200
         
-        # Define which angles to display for better readability
-        angle_labels = {
+        # All possible angles we track
+        all_angle_labels = {
             f"{side}_knee_angle": f"{side.title()} Knee",
             f"{side}_hip_angle": f"{side.title()} Hip", 
             f"{side}_ankle_angle": f"{side.title()} Ankle",
@@ -51,13 +50,29 @@ class DualPoseTracker:
         }
         
         y_position = start_y
-        for angle_key, label in angle_labels.items():
-            if angle_key in angles:
+        detected_count = 0
+        
+        for angle_key, label in all_angle_labels.items():
+            if angle_key in angles and angles[angle_key] is not None:
+                # Angle was successfully calculated
                 angle_value = angles[angle_key]
                 text = f"{label}: {angle_value:.1f}°"
-                cv2.putText(frame, text, (x_offset, y_position), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
-                y_position += 20
+                color = valid_color
+                detected_count += 1
+            else:
+                # Angle could not be calculated (missing joints)
+                text = f"{label}: N/A"
+                color = missing_color
+            
+            cv2.putText(frame, text, (x_offset, y_position), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+            y_position += 22
+        
+        # Show detection status
+        status_text = f"{side.title()}: {detected_count}/5 angles"
+        status_color = valid_color if detected_count > 0 else missing_color
+        cv2.putText(frame, status_text, (x_offset, y_position + 10), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, status_color, 1)
     
     def process_frame(self, frame):
         """Process a frame and return it with pose landmarks drawn"""
@@ -85,7 +100,7 @@ class DualPoseTracker:
                 self.mp_pose.POSE_CONNECTIONS,
                 landmark_drawing_spec=self.mp_drawing_styles.get_default_pose_landmarks_style()
             )
-            # Calculate joint angles for left side
+            # Calculate joint angles for left side (only returns successfully calculated angles)
             left_angles = self.angle_extractor_left.compute_all_angles(left_results.pose_landmarks)
         
         # Draw landmarks and calculate angles for right half
@@ -97,7 +112,7 @@ class DualPoseTracker:
                 self.mp_pose.POSE_CONNECTIONS,
                 landmark_drawing_spec=self.mp_drawing_styles.get_default_pose_landmarks_style()
             )
-            # Calculate joint angles for right side
+            # Calculate joint angles for right side (only returns successfully calculated angles)
             right_angles = self.angle_extractor_right.compute_all_angles(right_results.pose_landmarks)
         
         # Draw angle information on each half
@@ -123,6 +138,7 @@ class DualPoseTracker:
             return
         
         print("Dual Pose Tracker started. Press ESC to exit.")
+        print("Blue angles = detected joints | Gray angles = missing joints")
         
         try:
             while True:
@@ -140,7 +156,7 @@ class DualPoseTracker:
                 processed_frame = self.process_frame(frame)
                 
                 # Add title text
-                cv2.putText(processed_frame, "Dual Pose Tracker - Left Half | Right Half", 
+                cv2.putText(processed_frame, "Dual Pose Tracker - Only Real Joint Angles", 
                            (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
                 cv2.putText(processed_frame, "Press ESC to exit", 
                            (10, processed_frame.shape[0] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
