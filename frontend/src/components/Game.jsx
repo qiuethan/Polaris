@@ -1,41 +1,55 @@
 // components/Game.jsx
 'use client';
 
-import { KeyboardControls, Environment, OrthographicCamera } from "@react-three/drei";
+import { KeyboardControls, Environment } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
-import { Physics } from "@react-three/rapier";
-import { Suspense, useRef, useEffect } from "react";
+import { Physics, RigidBody } from "@react-three/rapier";
+import { Suspense, useEffect } from "react";
 import { Vector3 } from "three";
 import { proxy } from "valtio";
 import { useControls } from "leva";
 import { CharacterController } from "./CharacterController";
 import { Map } from "./Map";
 import { Minimap, maps } from "./Minimap";
+import { DualLaneSystem } from "./DualLaneSystem";
+import { PositionDisplay } from "./PositionDisplay";
+import { ObstacleCourse } from "./Obstacles";
+
 
 // Create game state
 export const GameState = proxy({
-  map: "castle_on_hills",
+  map: "medieval_fantasy_book",
   player1: {
-    position: new Vector3(-2, 0, 0),
+    position: new Vector3(0, 1, 0),
     rotation: 0,
+    pathProgress: 0,
   },
   player2: {
-    position: new Vector3(2, 0, 0),
+    position: new Vector3(3, 1, 0),
     rotation: 0,
+    pathProgress: 0.1,
   },
 });
 
 // Shared Scene Components
 function SharedScene({ playerId }) {
-  const { map } = useControls("Map", {
+  const { map, physicsDebug } = useControls("Map & Debug", {
     map: {
-      value: "castle_on_hills",
+      value: "medieval_fantasy_book",
       options: Object.keys(maps),
+    },
+    physicsDebug: {
+      value: false,
+      label: "Show Physics Debug"
     },
   });
   
   useEffect(() => {
     GameState.map = map;
+    // Reset player path progress when map changes
+    GameState.player1.pathProgress = 0;
+    GameState.player2.pathProgress = 0.1;
+    console.log("Map changed to:", map, "- Resetting player path progress");
   }, [map]);
   
   return (
@@ -69,7 +83,7 @@ function SharedScene({ playerId }) {
         model={`models/${map}.glb`}
       />
       
-      {/* Both players */}
+      {/* Characters - simple straight lanes */}
       <CharacterController 
         playerId="player1" 
         isControlled={playerId === "player1"}
@@ -80,6 +94,22 @@ function SharedScene({ playerId }) {
         isControlled={playerId === "player2"}
         color="#ef4444"
       />
+      <ObstacleCourse />
+
+      
+      {/* Lane markers for reference - extend both ways, closer together */}
+      <mesh position={[-0.5, 0.1, 0]}>
+        <boxGeometry args={[0.1, 0.1, 100]} />
+        <meshBasicMaterial color="#3b82f6" opacity={0.3} transparent />
+      </mesh>
+      <mesh position={[0.5, 0.1, 0]}>
+        <boxGeometry args={[0.1, 0.1, 100]} />
+        <meshBasicMaterial color="#ef4444" opacity={0.3} transparent />
+      </mesh>
+      
+      {/* Position display for debugging */}
+      {playerId === "player1" && <PositionDisplay playerId="player1" />}
+      {playerId === "player2" && <PositionDisplay playerId="player2" />}
     </>
   );
 }
@@ -88,23 +118,23 @@ function SharedScene({ playerId }) {
 const player1KeyboardMap = [
   { name: "forward", keys: ["KeyW"] },
   { name: "backward", keys: ["KeyS"] },
-  { name: "left", keys: ["KeyA"] },
-  { name: "right", keys: ["KeyD"] },
   { name: "run", keys: ["ShiftLeft"] },
-  { name: "jump", keys: ["Space"] },
+  { name: "jump", keys: ["KeyJ"] },
 ];
 
 // Player 2 controls (Arrow keys + Right Shift + Enter)
 const player2KeyboardMap = [
   { name: "forward", keys: ["ArrowUp"] },
   { name: "backward", keys: ["ArrowDown"] },
-  { name: "left", keys: ["ArrowLeft"] },
-  { name: "right", keys: ["ArrowRight"] },
   { name: "run", keys: ["ShiftRight"] },
-  { name: "jump", keys: ["Enter"] },
+  { name: "jump", keys: ["KeyL"] },
 ];
 
 export default function Game() {
+  const { physicsDebug } = useControls("Map & Debug", {
+    physicsDebug: { value: false }
+  });
+
   return (
     <div className="w-full h-screen flex bg-black">
       {/* Player 1 View - Left Side */}
@@ -112,11 +142,11 @@ export default function Game() {
         <KeyboardControls map={player1KeyboardMap}>
           <Canvas
             shadows
-            camera={{ position: [3, 3, 3], near: 0.1, fov: 40 }}
+            camera={{ position: [2, 1.5, -2], near: 0.01, fov: 60 }}
             gl={{ antialias: true }}
           >
             <Suspense fallback={null}>
-              <Physics debug={false}>
+              <Physics debug={physicsDebug} gravity={[0, -30, 0]}>
                 <SharedScene playerId="player1" />
               </Physics>
             </Suspense>
@@ -132,7 +162,7 @@ export default function Game() {
         
         {/* Player 1 Label */}
         <div className="absolute top-4 left-56 bg-blue-600 text-white px-4 py-2 rounded-lg font-bold shadow-lg">
-          Player 1 (WASD + Space)
+          Player 1 (W/S + Space)
         </div>
       </div>
 
@@ -144,11 +174,11 @@ export default function Game() {
         <KeyboardControls map={player2KeyboardMap}>
           <Canvas
             shadows
-            camera={{ position: [3, 3, 3], near: 0.1, fov: 40 }}
+            camera={{ position: [2, 1.5, -2], near: 0.01, fov: 60 }}
             gl={{ antialias: true }}
           >
             <Suspense fallback={null}>
-              <Physics debug={false}>
+              <Physics debug={physicsDebug} gravity={[0, -30, 0]}>
                 <SharedScene playerId="player2" />
               </Physics>
             </Suspense>
@@ -164,7 +194,7 @@ export default function Game() {
         
         {/* Player 2 Label */}
         <div className="absolute top-4 right-56 bg-red-600 text-white px-4 py-2 rounded-lg font-bold shadow-lg">
-          Player 2 (Arrows + Enter)
+          Player 2 (↑/↓ + Enter)
         </div>
       </div>
     </div>

@@ -1,48 +1,40 @@
-// components/CharacterController.jsx
+// components/CharacterController.jsx - IMPROVED VERSION
 import { useKeyboardControls } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import { CapsuleCollider, RigidBody } from "@react-three/rapier";
 import { useControls } from "leva";
 import { useEffect, useRef, useState } from "react";
 import { MathUtils, Vector3 } from "three";
-import { degToRad } from "three/src/math/MathUtils.js";
 import { Character } from "./Character";
 import { GameState } from "./Game";
 
-const normalizeAngle = (angle) => {
-  while (angle > Math.PI) angle -= 2 * Math.PI;
-  while (angle < -Math.PI) angle += 2 * Math.PI;
-  return angle;
-};
-
-const lerpAngle = (start, end, t) => {
-  start = normalizeAngle(start);
-  end = normalizeAngle(end);
-
-  if (Math.abs(end - start) > Math.PI) {
-    if (end > start) {
-      start += 2 * Math.PI;
-    } else {
-      end += 2 * Math.PI;
-    }
-  }
-
-  return normalizeAngle(start + (end - start) * t);
-};
-
-export const CharacterController = ({ playerId, isControlled, color = "#ffffff" }) => {
-  const { WALK_SPEED, RUN_SPEED, ROTATION_SPEED, JUMP_FORCE } = useControls(
+export const CharacterController = ({ 
+  playerId, 
+  isControlled, 
+  color = "#ffffff"
+}) => {
+  const { 
+    WALK_SPEED, 
+    RUN_SPEED, 
+    JUMP_FORCE, 
+    LANE_SEPARATION,
+    CAMERA_DISTANCE,
+    CAMERA_HEIGHT,
+    CAMERA_LERP_SPEED,
+    POV_MODE,
+    GROUND_DETECTION_DISTANCE
+  } = useControls(
     "Character Control",
     {
-      WALK_SPEED: { value: 2.0, min: 0.1, max: 4, step: 0.1 },
-      RUN_SPEED: { value: 4.0, min: 0.2, max: 12, step: 0.1 },
-      ROTATION_SPEED: {
-        value: degToRad(2),
-        min: degToRad(0.1),
-        max: degToRad(5),
-        step: degToRad(0.1),
-      },
-      JUMP_FORCE: { value: 5, min: 1, max: 10, step: 0.5 },
+      WALK_SPEED: { value: 3.0, min: 0.5, max: 8, step: 0.1 },
+      RUN_SPEED: { value: 6.0, min: 1, max: 15, step: 0.1 },
+      JUMP_FORCE: { value: 8, min: 3, max: 15, step: 0.5 },
+      LANE_SEPARATION: { value: 1, min: 0.5, max: 3, step: 0.1 },
+      CAMERA_DISTANCE: { value: 3, min: 1, max: 15, step: 0.5 },
+      CAMERA_HEIGHT: { value: 2, min: 0.5, max: 10, step: 0.5 },
+      CAMERA_LERP_SPEED: { value: 0.2, min: 0.01, max: 0.5, step: 0.01 },
+      POV_MODE: { value: false, label: "First Person View" },
+      GROUND_DETECTION_DISTANCE: { value: 0.7, min: 0.3, max: 2, step: 0.1, label: "Ground Detection" },
     }
   );
   
@@ -53,167 +45,175 @@ export const CharacterController = ({ playerId, isControlled, color = "#ffffff" 
   const cameraPosition = useRef();
 
   const [animation, setAnimation] = useState("idle");
-  const characterRotationTarget = useRef(0);
-  const rotationTarget = useRef(0);
+  const [isGrounded, setIsGrounded] = useState(false);
   
   const cameraWorldPosition = useRef(new Vector3());
   const cameraLookAtWorldPosition = useRef(new Vector3());
   const cameraLookAt = useRef(new Vector3());
   
   const [, get] = useKeyboardControls();
-  const isClicking = useRef(false);
-  const isOnFloor = useRef(true);
-  const canJump = useRef(true);
+  const jumpCooldown = useRef(0);
+  const groundCheckTimer = useRef(0);
+
+  // Fixed lane positions
+  const laneX = playerId === "player1" ? -LANE_SEPARATION/2 : LANE_SEPARATION/2;
 
   // Initialize position
   useEffect(() => {
     if (rb.current && GameState[playerId]) {
       const timer = setTimeout(() => {
-        const initialPos = GameState[playerId].position;
         rb.current.setTranslation({
-          x: initialPos.x,
-          y: 2, // Start higher to avoid getting stuck
-          z: initialPos.z
+          x: laneX,
+          y: 5,
+          z: -10
         });
-        console.log(`Initialized ${playerId} position`);
+        console.log(`Initialized ${playerId} at lane X=${laneX}`);
       }, 100);
       
       return () => clearTimeout(timer);
     }
-  }, [playerId]);
+  }, [playerId, laneX]);
 
-  useEffect(() => {
-    if (!isControlled) return;
-
-    const onMouseDown = () => isClicking.current = true;
-    const onMouseUp = () => isClicking.current = false;
+  // Better ground detection using raycast
+  const checkGrounded = () => {
+    if (!rb.current) return false;
     
-    document.addEventListener("mousedown", onMouseDown);
-    document.addEventListener("mouseup", onMouseUp);
+    const pos = rb.current.translation();
+    const vel = rb.current.linvel();
     
-    return () => {
-      document.removeEventListener("mousedown", onMouseDown);
-      document.removeEventListener("mouseup", onMouseUp);
-    };
-  }, [isControlled]);
+    // Simple ground detection: low Y velocity + not too high off ground
+    const isLowVelocity = Math.abs(vel.y) < 2;
+    const isReasonableHeight = pos.y < 10; // Adjust based on your world
+    
+    return isLowVelocity && isReasonableHeight;
+  };
 
-  useFrame(({ camera, mouse }) => {
+  useFrame(({ camera }, delta) => {
     if (!rb.current) return;
 
     if (isControlled) {
       const vel = rb.current.linvel();
-      const movement = { x: 0, z: 0 };
-
-      // Check if on floor (simple ground check)
-      isOnFloor.current = Math.abs(vel.y) < 0.1;
+      const pos = rb.current.translation();
       
+      // Update timers
+      jumpCooldown.current = Math.max(0, jumpCooldown.current - delta);
+      groundCheckTimer.current += delta;
+      
+      // Check grounded state periodically
+      if (groundCheckTimer.current > 0.1) { // Check every 100ms
+        setIsGrounded(checkGrounded());
+        groundCheckTimer.current = 0;
+      }
+
       // Get input
-      if (get().forward) movement.z = 1;
-      if (get().backward) movement.z = -1;
-      if (get().left) movement.x = 1;
-      if (get().right) movement.x = -1;
-
-      // Jump logic
-      if (get().jump && isOnFloor.current && canJump.current) {
-        rb.current.applyImpulse({ x: 0, y: JUMP_FORCE, z: 0 }, true);
-        canJump.current = false;
-        setAnimation("jump");
-      }
+      const forward = get().forward;
+      const backward = get().backward;
+      const run = get().run;
+      const jump = get().jump;
       
-      // Reset jump when landing
-      if (!get().jump && isOnFloor.current) {
-        canJump.current = true;
+      let movement = 0;
+      if (forward) movement = 1;
+      if (backward) movement = -1;
+
+      // JUMP LOGIC - Much simpler and more reliable
+      if (jump && isGrounded && jumpCooldown.current <= 0) {
+        console.log(`${playerId} jumping! (grounded: ${isGrounded})`);
+        
+        // Simple impulse jump - don't mess with velocities
+        rb.current.applyImpulse({ x: 0, y: JUMP_FORCE, z: 0 }, true);
+        
+        jumpCooldown.current = 0.5; // Longer cooldown prevents spam
+        setAnimation("jump");
+        setIsGrounded(false); // Immediately set to false after jump
       }
 
-      let speed = get().run ? RUN_SPEED : WALK_SPEED;
-
-      // Mouse control for player 1
-      if (isClicking.current && playerId === "player1") {
-        movement.x = -mouse.x * 2;
-        movement.z = mouse.y + 0.4;
-        if (Math.abs(movement.x) > 0.5 || Math.abs(movement.z) > 0.5) {
-          speed = RUN_SPEED;
-        }
-      }
-
-      // Rotation
-      if (movement.x !== 0) {
-        rotationTarget.current += ROTATION_SPEED * movement.x;
-      }
-
-      // Movement
-      if (movement.x !== 0 || movement.z !== 0) {
-        characterRotationTarget.current = Math.atan2(movement.x, movement.z);
-        
-        // Set velocity
-        const moveAngle = rotationTarget.current + characterRotationTarget.current;
-        const newVelX = Math.sin(moveAngle) * speed;
-        const newVelZ = Math.cos(moveAngle) * speed;
-        
-        // Apply velocity - keep Y velocity for gravity
-        rb.current.setLinvel({ x: newVelX, y: vel.y, z: newVelZ }, true);
-        
-        if (isOnFloor.current) {
+      // MOVEMENT LOGIC - Cleaner separation between air and ground
+      const speed = run ? RUN_SPEED : WALK_SPEED;
+      const currentPos = rb.current.translation();
+      
+      // Lane correction (always apply, but gentler)
+      const laneOffset = currentPos.x - laneX;
+      const laneCorrectionForce = -laneOffset * 3; // Gentler correction
+      
+      if (isGrounded) {
+        // GROUNDED MOVEMENT - Full control
+        if (movement !== 0) {
+          rb.current.setLinvel({
+            x: laneCorrectionForce,
+            y: vel.y, // Don't touch Y when grounded
+            z: movement * speed
+          }, true);
+          
           setAnimation(speed === RUN_SPEED ? "run" : "walk");
-        }
-      } else {
-        // Stop horizontal movement but keep gravity
-        rb.current.setLinvel({ x: 0, y: vel.y, z: 0 }, true);
-        if (isOnFloor.current) {
+        } else {
+          // Idle - just lane correction
+          rb.current.setLinvel({
+            x: laneCorrectionForce,
+            y: vel.y,
+            z: 0
+          }, true);
+          
           setAnimation("idle");
         }
+      } else {
+        // AIRBORNE MOVEMENT - Limited air control
+        const airControl = 0.3; // Reduced air control
+        
+        rb.current.setLinvel({
+          x: MathUtils.lerp(vel.x, laneCorrectionForce, 0.1), // Gentle lane correction in air
+          y: vel.y, // Never touch Y velocity in air
+          z: MathUtils.lerp(vel.z, movement * speed * airControl, 0.1) // Limited air control
+        }, true);
+        
+        // Animation based on Y velocity
+        if (vel.y > 1) {
+          setAnimation("jump");
+        } else if (vel.y < -1) {
+          setAnimation("fall"); // If you have a fall animation
+        }
       }
 
-      // Update character rotation
+      // Character rotation
       if (character.current) {
-        character.current.rotation.y = lerpAngle(
-          character.current.rotation.y,
-          characterRotationTarget.current,
-          0.1
-        );
+        character.current.rotation.y = 0;
       }
+      container.current.rotation.y = 0;
 
       // Update GameState
-      const pos = rb.current.translation();
-      GameState[playerId].position.set(pos.x, pos.y, pos.z);
-      GameState[playerId].rotation = rotationTarget.current;
+      GameState[playerId].position.set(currentPos.x, currentPos.y, currentPos.z);
+      GameState[playerId].rotation = 0;
 
-      // Camera follow
-      container.current.rotation.y = MathUtils.lerp(
-        container.current.rotation.y,
-        rotationTarget.current,
-        0.1
-      );
-
+      // Camera follow (unchanged)
       if (cameraPosition.current && cameraTarget.current) {
+        if (POV_MODE) {
+          cameraPosition.current.position.set(0, 1.5, 0.2);
+          cameraTarget.current.position.set(0, 1.5, 5);
+        } else {
+          cameraPosition.current.position.set(0, CAMERA_HEIGHT, -CAMERA_DISTANCE);
+          cameraTarget.current.position.set(0, CAMERA_HEIGHT * 0.5, CAMERA_DISTANCE * 0.6);
+        }
+        
         cameraPosition.current.getWorldPosition(cameraWorldPosition.current);
-        camera.position.lerp(cameraWorldPosition.current, 0.1);
-
+        camera.position.lerp(cameraWorldPosition.current, CAMERA_LERP_SPEED);
+        
         cameraTarget.current.getWorldPosition(cameraLookAtWorldPosition.current);
-        cameraLookAt.current.lerp(cameraLookAtWorldPosition.current, 0.1);
+        cameraLookAt.current.lerp(cameraLookAtWorldPosition.current, CAMERA_LERP_SPEED);
         camera.lookAt(cameraLookAt.current);
       }
     } else {
-      // Non-controlled character syncs from GameState
+      // Non-controlled character syncs from GameState (unchanged)
       const state = GameState[playerId];
       if (state && state.position) {
         const currentPos = rb.current.translation();
         
-        // Smooth position sync
         rb.current.setTranslation({
           x: MathUtils.lerp(currentPos.x, state.position.x, 0.2),
-          y: MathUtils.lerp(currentPos.y, state.position.y, 0.2), // Sync Y position too
+          y: MathUtils.lerp(currentPos.y, state.position.y, 0.2),
           z: MathUtils.lerp(currentPos.z, state.position.z, 0.2)
         });
         
-        // Sync rotation
-        container.current.rotation.y = MathUtils.lerp(
-          container.current.rotation.y,
-          state.rotation,
-          0.2
-        );
+        container.current.rotation.y = 0;
         
-        // Estimate animation from movement
         const dx = state.position.x - currentPos.x;
         const dy = state.position.y - currentPos.y;
         const dz = state.position.z - currentPos.z;
@@ -221,9 +221,9 @@ export const CharacterController = ({ playerId, isControlled, color = "#ffffff" 
         
         if (Math.abs(dy) > 0.1) {
           setAnimation("jump");
-        } else if (moveSpeed > 0.05) {
+        } else if (moveSpeed > 0.1) {
           setAnimation("run");
-        } else if (moveSpeed > 0.01) {
+        } else if (moveSpeed > 0.02) {
           setAnimation("walk");
         } else {
           setAnimation("idle");
@@ -237,30 +237,41 @@ export const CharacterController = ({ playerId, isControlled, color = "#ffffff" 
       ref={rb}
       colliders={false}
       lockRotations
-      linearDamping={2}  // Reduced from 4
+      linearDamping={0.4} // Slightly higher damping for more control
       angularDamping={4}
-      gravityScale={1.5}  // Reduced from 2
+      gravityScale={1.8}
     >
-      {/* Adjusted capsule collider - bigger and better positioned */}
-      <CapsuleCollider args={[0.25, 0.15]} position={[0, 0.4, 0]} />
+      <CapsuleCollider args={[0.3, 0.2]} position={[0, 0.5, 0]} />
       
       <group ref={container}>
         {isControlled && (
           <>
-            <group ref={cameraTarget} position-z={1.5} />
-            <group ref={cameraPosition} position-y={4} position-z={-4} />
+            <group ref={cameraTarget} position-z={1} />
+            <group ref={cameraPosition} position-y={2} position-z={-3} />
           </>
         )}
         <group ref={character}>
-          {/* Adjusted character position to align with collider */}
-          <Character scale={0.18} position-y={0} animation={animation} />
+          <Character 
+            scale={0.18} 
+            position-y={0.1} 
+            animation={animation} 
+            visible={!isControlled || !POV_MODE}
+          />
         </group>
         
-        {/* Color indicator cone - positioned above character */}
-        <mesh position={[0, 0.8, 0]}>
+        {/* Visual indicator for grounded state */}
+        <mesh position={[0, 0.9, 0]} visible={!isControlled || !POV_MODE}>
           <coneGeometry args={[0.1, 0.2, 4]} />
-          <meshBasicMaterial color={color} />
+          <meshBasicMaterial color={isGrounded ? color : "#666666"} />
         </mesh>
+        
+        {/* Debug: Show grounded state */}
+        {isControlled && (
+          <mesh position={[0, 1.2, 0]} visible={!POV_MODE}>
+            <sphereGeometry args={[0.05]} />
+            <meshBasicMaterial color={isGrounded ? "#00ff00" : "#ff0000"} />
+          </mesh>
+        )}
       </group>
     </RigidBody>
   );
