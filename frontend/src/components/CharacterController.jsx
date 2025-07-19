@@ -22,7 +22,9 @@ export const CharacterController = ({
     CAMERA_HEIGHT,
     CAMERA_LERP_SPEED,
     POV_MODE,
-    GROUND_DETECTION_DISTANCE
+    GROUND_DETECTION_DISTANCE,
+    ACCELERATION,
+    DECELERATION
   } = useControls(
     "Character Control",
     {
@@ -35,6 +37,8 @@ export const CharacterController = ({
       CAMERA_LERP_SPEED: { value: 0.2, min: 0.01, max: 0.5, step: 0.01 },
       POV_MODE: { value: false, label: "First Person View" },
       GROUND_DETECTION_DISTANCE: { value: 0.7, min: 0.3, max: 2, step: 0.1, label: "Ground Detection" },
+      ACCELERATION: { value: 8, min: 1, max: 20, step: 0.5, label: "Car Acceleration" },
+      DECELERATION: { value: 6, min: 1, max: 15, step: 0.5, label: "Car Deceleration" },
     }
   );
   
@@ -46,6 +50,7 @@ export const CharacterController = ({
 
   const [animation, setAnimation] = useState("idle");
   const [isGrounded, setIsGrounded] = useState(false);
+  const [isCrouching, setIsCrouching] = useState(false);
   
   const cameraWorldPosition = useRef(new Vector3());
   const cameraLookAtWorldPosition = useRef(new Vector3());
@@ -54,9 +59,97 @@ export const CharacterController = ({
   const [, get] = useKeyboardControls();
   const jumpCooldown = useRef(0);
   const groundCheckTimer = useRef(0);
+  const jumpingFlag = useRef(false); // Prevent movement logic from overriding jump
+  
+  // Car-like movement variables
+  const currentSpeed = useRef(0); // Current forward/backward speed
+  const acceleration = useRef(20); // How fast to accelerate
+  const deceleration = useRef(15); // How fast to decelerate when no input
+  
+  // Update acceleration/deceleration from Leva controls
+  useEffect(() => {
+    acceleration.current = ACCELERATION;
+    deceleration.current = DECELERATION;
+  }, [ACCELERATION, DECELERATION]);
+  
+  // Smooth and realistic jump function
+  const doJump = () => {
+    const caller = new Error().stack?.split('\n')[2]?.trim() || 'unknown';
+    console.log(`🚀 [${playerId}] doJump called from: ${caller}`);
+    
+    if (!rb.current) {
+      console.log(`❌ [${playerId}] rb.current is null!`);
+      return;
+    }
+    
+    // Additional safety check for purple button
+    if (jumpCooldown.current > 0) {
+      console.log(`❌ [${playerId}] Purple button blocked - still cooling down: ${jumpCooldown.current.toFixed(2)}s`);
+      return;
+    }
+    
+    if (!isGrounded) {
+      console.log(`❌ [${playerId}] Purple button blocked - not grounded`);
+      return;
+    }
+    
+    console.log(`🚀 [${playerId}] JUMPING! Setting Y velocity to 22, Z momentum: ${forwardMomentum}`);
+    
+    // Get current state
+    const currentVel = rb.current.linvel();
+    console.log(`🚀 [${playerId}] Current velocity before jump:`, currentVel);
+    
+    // Set jumping flag to prevent movement logic from overriding
+    jumpingFlag.current = true;
+    
+    // Strong upward velocity with forward momentum
+    const forwardMomentum = Math.max(currentVel.z + 5, 15); // Add 5 to current speed or boost to 15
+    rb.current.setLinvel({
+      x: currentVel.x,
+      y: 22, // Higher jump force for better obstacle clearance
+      z: forwardMomentum // Enhanced forward momentum to clear obstacles
+    }, true);
+    
+    // Verify velocity was set
+    const newVel = rb.current.linvel();
+    console.log(`✅ [${playerId}] New velocity after setLinvel:`, newVel);
+    
+    setAnimation("jump");
+    jumpCooldown.current = 1.0; // 1 second cooldown to prevent double jumping
+    setIsGrounded(false);
+    
+    // Clear jumping flag after a short delay (shorter than cooldown)
+    setTimeout(() => {
+      jumpingFlag.current = false;
+      console.log(`🕐 [${playerId}] Jumping flag cleared`);
+    }, 200); // 200ms - protects jump but allows new ones after cooldown
+    
+    console.log(`✅ [${playerId}] Jump complete - should be moving upward!`);
+  };
+  
+  // Make doJump available globally for debugging
+  if (isControlled && typeof window !== 'undefined') {
+    window[`doJump_${playerId}`] = doJump;
+    console.log(`🔧 [${playerId}] doJump function available as window.doJump_${playerId}`);
+  }
 
   // Fixed lane positions
   const laneX = playerId === "player1" ? -LANE_SEPARATION/2 : LANE_SEPARATION/2;
+
+  // Handle crouch momentum boost
+  useEffect(() => {
+    if (isCrouching && rb.current && isGrounded) {
+      const currentVel = rb.current.linvel();
+      // Give a tiny forward boost when starting to crouch
+      const crouchBoost = Math.max(currentVel.z + 0.2, 0.5); // Add 0.2 to current speed or min 0.5 (very gentle)
+      rb.current.setLinvel({
+        x: currentVel.x,
+        y: currentVel.y,
+        z: crouchBoost
+      }, true);
+      console.log(`🐌 [${playerId}] GENTLE CROUCH CRAWL! Z velocity: ${crouchBoost} (+0.2 speed)`);
+    }
+  }, [isCrouching, playerId, isGrounded]);
 
   // Initialize position
   useEffect(() => {
@@ -74,18 +167,19 @@ export const CharacterController = ({
     }
   }, [playerId, laneX]);
 
-  // Better ground detection using raycast
+  // Smooth ground detection 
   const checkGrounded = () => {
     if (!rb.current) return false;
     
     const pos = rb.current.translation();
     const vel = rb.current.linvel();
     
-    // Simple ground detection: low Y velocity + not too high off ground
-    const isLowVelocity = Math.abs(vel.y) < 2;
-    const isReasonableHeight = pos.y < 10; // Adjust based on your world
+    // Realistic ground detection
+    const isLowYVelocity = Math.abs(vel.y) < 1;
+    const isAtGroundLevel = pos.y < 2.5; // Close to ground level
+    const isNotFallingFast = vel.y > -3; // Not falling too fast
     
-    return isLowVelocity && isReasonableHeight;
+    return isLowYVelocity && isAtGroundLevel && isNotFallingFast;
   };
 
   useFrame(({ camera }, delta) => {
@@ -99,70 +193,169 @@ export const CharacterController = ({
       jumpCooldown.current = Math.max(0, jumpCooldown.current - delta);
       groundCheckTimer.current += delta;
       
-      // Check grounded state periodically
-      if (groundCheckTimer.current > 0.1) { // Check every 100ms
-        setIsGrounded(checkGrounded());
+      // Check grounded state more frequently
+      if (groundCheckTimer.current > 0.05) { // Check every 50ms for better responsiveness
+        const newGroundedState = checkGrounded();
+        if (newGroundedState !== isGrounded && isControlled) {
+          console.log(`🌍 [${playerId}] Ground state changed: ${isGrounded} → ${newGroundedState}, Y: ${pos.y}, Vel: ${vel.y}`);
+        }
+        setIsGrounded(newGroundedState);
         groundCheckTimer.current = 0;
       }
 
-      // Get input
-      const forward = get().forward;
-      const backward = get().backward;
-      const run = get().run;
-      const jump = get().jump;
+      // Get input based on player ID from unified keyboard map
+      const playerPrefix = playerId === "player1" ? "p1_" : "p2_";
       
-      let movement = 0;
-      if (forward) movement = 1;
-      if (backward) movement = -1;
+      // Let's debug the get() function and see what it returns
+      const allKeys = get();
+      if (isControlled && Math.random() < 0.01) { // Log occasionally
+        console.log(`🔍 [${playerId}] All available keys:`, Object.keys(allKeys));
+        console.log(`🔍 [${playerId}] Looking for: ${playerPrefix}jump`);
+        console.log(`🔍 [${playerId}] Jump value:`, allKeys[playerPrefix + "jump"]);
+      }
+      
+      const forward = get()[playerPrefix + "forward"];
+      const backward = get()[playerPrefix + "backward"];
+      const run = get()[playerPrefix + "run"];
+      const jump = get()[playerPrefix + "jump"];
+      const crouch = get()[playerPrefix + "crouch"];
+      
+      // Debug the actual values we're getting
+      if (isControlled && (forward || backward || run || jump || crouch)) {
+        console.log(`🔍 [${playerId}] Raw values - forward:${forward}, backward:${backward}, run:${run}, jump:${jump}, crouch:${crouch}`);
+      }
+      
+                  // Debug keyboard input detection
+      if (isControlled) {
+        const inputs = { forward, backward, run, jump, crouch };
+        const activeInputs = Object.entries(inputs).filter(([key, value]) => value).map(([key]) => key);
+        if (activeInputs.length > 0) {
+          console.log(`⌨️ [${playerId}] Active inputs (${playerPrefix}):`, activeInputs.join(', '));
+        }
+        
+         // Specifically debug jump key
+         if (jump) {
+           console.log(`🔑 [${playerId}] JUMP KEY DETECTED using ${playerPrefix}jump! Cooldown: ${jumpCooldown.current.toFixed(2)}, Crouch: ${crouch}`);
+         }
+      }
+      
+            // Car-like acceleration system - PROPER IMPLEMENTATION
+      const maxSpeed = run ? RUN_SPEED : WALK_SPEED;
+      const targetSpeed = forward ? maxSpeed : (backward ? -maxSpeed : 0);
+      
+      // Calculate actual acceleration/deceleration per second
+      const accelPerSecond = acceleration.current; // units per second
+      const decelPerSecond = deceleration.current; // units per second
+      
+      // Convert to per-frame values
+      const accelThisFrame = accelPerSecond * delta;
+      const decelThisFrame = decelPerSecond * delta;
+      
+      if (targetSpeed !== 0) {
+        // Accelerating towards target
+        if (Math.abs(currentSpeed.current) < Math.abs(targetSpeed)) {
+          // Add acceleration this frame
+          if (targetSpeed > 0) {
+            currentSpeed.current = Math.min(currentSpeed.current + accelThisFrame, targetSpeed);
+          } else {
+            currentSpeed.current = Math.max(currentSpeed.current - accelThisFrame, targetSpeed);
+          }
+        } else {
+          // Already at target speed
+          currentSpeed.current = targetSpeed;
+        }
+      } else {
+        // Decelerating towards zero
+        if (Math.abs(currentSpeed.current) > 0.1) {
+          if (currentSpeed.current > 0) {
+            currentSpeed.current = Math.max(0, currentSpeed.current - decelThisFrame);
+          } else {
+            currentSpeed.current = Math.min(0, currentSpeed.current + decelThisFrame);
+          }
+        } else {
+          currentSpeed.current = 0; // Stop completely when very slow
+        }
+      }
+      
+      // Apply minimal speed boost when crouching (momentum for obstacles)
+      const finalSpeed = currentSpeed.current * (crouch ? 1.05 : 1); // 5% speed boost when crouching (very minimal)
+      
+      // Debug car movement more frequently to see it working
+      if (isControlled && (forward || backward || Math.abs(currentSpeed.current) > 0.1)) {
+        const speedInfo = crouch ? " (CROUCH CRAWL +5%)" : "";
+        console.log(`🏎️ [${playerId}] Target: ${targetSpeed.toFixed(2)}, Current: ${currentSpeed.current.toFixed(2)}, Final: ${finalSpeed.toFixed(2)}, AccelFrame: ${accelThisFrame.toFixed(3)}${speedInfo}`);
+      }
 
-      // JUMP LOGIC - Much simpler and more reliable
-      if (jump && isGrounded && jumpCooldown.current <= 0) {
-        console.log(`${playerId} jumping! (grounded: ${isGrounded})`);
+      // Update crouching state
+      setIsCrouching(crouch && isGrounded);
+      
+      // PERSISTENT CROUCH MOVEMENT - Auto scoot forward while crouching
+      if (crouch && isGrounded) {
+        // Add automatic forward movement while crouching (very slow crawl)
+        const crouchSpeed = 0.3; // Very slow crawling speed
+        currentSpeed.current = Math.max(currentSpeed.current, crouchSpeed);
         
-        // Simple impulse jump - don't mess with velocities
-        rb.current.applyImpulse({ x: 0, y: JUMP_FORCE, z: 0 }, true);
-        
-        jumpCooldown.current = 0.5; // Longer cooldown prevents spam
-        setAnimation("jump");
-        setIsGrounded(false); // Immediately set to false after jump
+        // Cap maximum speed when crouching to prevent it from being too fast
+        if (currentSpeed.current > 1.0) {
+          currentSpeed.current = 1.0; // Very low max crouch speed cap
+        }
+      }
+      
+      // KEYBOARD JUMP - EXACTLY LIKE PURPLE BUTTON onClick={doJump}
+      // Let's test if the conditions are the problem
+      if (jump) {
+        console.log(`🔑 [${playerId}] Jump detected! isControlled: ${isControlled}`);
+        if (isControlled) {
+          console.log(`✅ [${playerId}] isControlled is true - calling doJump!`);
+          doJump();
+        } else {
+          console.log(`❌ [${playerId}] isControlled is FALSE - this is the problem!`);
+        }
       }
 
       // MOVEMENT LOGIC - Cleaner separation between air and ground
-      const speed = run ? RUN_SPEED : WALK_SPEED;
+      const speed = (run ? RUN_SPEED : WALK_SPEED) * (crouch ? 0.5 : 1); // Slower when crouching
       const currentPos = rb.current.translation();
       
       // Lane correction (always apply, but gentler)
       const laneOffset = currentPos.x - laneX;
       const laneCorrectionForce = -laneOffset * 3; // Gentler correction
       
-      if (isGrounded) {
-        // GROUNDED MOVEMENT - Full control
-        if (movement !== 0) {
-          rb.current.setLinvel({
-            x: laneCorrectionForce,
-            y: vel.y, // Don't touch Y when grounded
-            z: movement * speed
-          }, true);
-          
-          setAnimation(speed === RUN_SPEED ? "run" : "walk");
+      if (isGrounded && !jumpingFlag.current) {
+        // GROUNDED MOVEMENT - Car-like acceleration/deceleration
+        rb.current.setLinvel({
+          x: laneCorrectionForce,
+          y: vel.y, // Don't touch Y when grounded
+          z: finalSpeed
+        }, true);
+        
+        // Set animation based on actual speed
+        const absSpeed = Math.abs(finalSpeed);
+        if (crouch) {
+          setAnimation("idle"); // Crouched movement
+        } else if (absSpeed > RUN_SPEED * 0.7) {
+          setAnimation("run");
+        } else if (absSpeed > 0.5) {
+          setAnimation("walk");
         } else {
-          // Idle - just lane correction
-          rb.current.setLinvel({
-            x: laneCorrectionForce,
-            y: vel.y,
-            z: 0
-          }, true);
-          
           setAnimation("idle");
         }
+      } else if (jumpingFlag.current) {
+        // JUMPING - Don't override Y velocity, only adjust X and Z
+        console.log(`🚀 [${playerId}] In jumping mode - preserving Y velocity: ${vel.y}`);
+        rb.current.setLinvel({
+          x: MathUtils.lerp(vel.x, laneCorrectionForce, 0.1),
+          y: vel.y, // Keep the jump velocity
+          z: MathUtils.lerp(vel.z, finalSpeed * 0.3, 0.1) // Use car-like speed in air too
+        }, true);
       } else {
-        // AIRBORNE MOVEMENT - Limited air control
+        // AIRBORNE MOVEMENT - Limited air control with car-like momentum
         const airControl = 0.3; // Reduced air control
         
         rb.current.setLinvel({
           x: MathUtils.lerp(vel.x, laneCorrectionForce, 0.1), // Gentle lane correction in air
           y: vel.y, // Never touch Y velocity in air
-          z: MathUtils.lerp(vel.z, movement * speed * airControl, 0.1) // Limited air control
+          z: MathUtils.lerp(vel.z, finalSpeed * airControl, 0.1) // Limited air control with momentum
         }, true);
         
         // Animation based on Y velocity
@@ -236,12 +429,19 @@ export const CharacterController = ({
     <RigidBody 
       ref={rb}
       colliders={false}
-      lockRotations
-      linearDamping={0.4} // Slightly higher damping for more control
+      lockRotations={true}
+      linearDamping={0.3} // Moderate damping for smooth movement
       angularDamping={4}
-      gravityScale={1.8}
+      gravityScale={1.4} // Balanced gravity for realistic jumping
+      enabledRotations={[false, false, false]} // Lock all rotations
+      type="dynamic" // Ensure it's a dynamic body
+      mass={1} // Lightweight character
     >
-      <CapsuleCollider args={[0.3, 0.2]} position={[0, 0.5, 0]} />
+      {/* Smaller collider when crouching */}
+      <CapsuleCollider 
+        args={isCrouching ? [0.2, 0.15] : [0.3, 0.2]} 
+        position={isCrouching ? [0, 0.3, 0] : [0, 0.5, 0]} 
+      />
       
       <group ref={container}>
         {isControlled && (
@@ -256,6 +456,7 @@ export const CharacterController = ({
             position-y={0.1} 
             animation={animation} 
             visible={!isControlled || !POV_MODE}
+            isCrouching={isCrouching}
           />
         </group>
         
@@ -265,12 +466,28 @@ export const CharacterController = ({
           <meshBasicMaterial color={isGrounded ? color : "#666666"} />
         </mesh>
         
-        {/* Debug: Show grounded state */}
+        {/* Debug: Show grounded state and jump status */}
         {isControlled && (
-          <mesh position={[0, 1.2, 0]} visible={!POV_MODE}>
-            <sphereGeometry args={[0.05]} />
-            <meshBasicMaterial color={isGrounded ? "#00ff00" : "#ff0000"} />
-          </mesh>
+          <>
+            <mesh position={[0, 1.2, 0]} visible={!POV_MODE}>
+              <sphereGeometry args={[0.05]} />
+              <meshBasicMaterial color={isGrounded ? "#00ff00" : "#ff0000"} />
+            </mesh>
+            {/* Jump cooldown indicator */}
+            <mesh position={[0, 1.4, 0]} visible={!POV_MODE}>
+              <sphereGeometry args={[0.03]} />
+              <meshBasicMaterial color={jumpCooldown.current > 0 ? "#ffff00" : "#ffffff"} />
+            </mesh>
+                         {/* Manual jump button for debugging */}
+             <mesh 
+               position={[0, 1.6, 0]} 
+               visible={!POV_MODE}
+               onClick={doJump}
+             >
+               <boxGeometry args={[0.2, 0.1, 0.1]} />
+               <meshBasicMaterial color="#ff00ff" />
+             </mesh>
+          </>
         )}
       </group>
     </RigidBody>

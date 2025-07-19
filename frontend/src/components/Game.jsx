@@ -119,20 +119,21 @@ function SharedScene({ playerId, usePoseControl = false }) {
   );
 }
 
-// Player 1 controls (WASD + Shift + Space) - for keyboard fallback
-const player1KeyboardMap = [
-  { name: "forward", keys: ["KeyW"] },
-  { name: "backward", keys: ["KeyS"] },
-  { name: "run", keys: ["ShiftLeft"] },
-  { name: "jump", keys: ["KeyJ"] },
-];
-
-// Player 2 controls (Arrow keys + Right Shift + Enter) - for keyboard fallback
-const player2KeyboardMap = [
-  { name: "forward", keys: ["ArrowUp"] },
-  { name: "backward", keys: ["ArrowDown"] },
-  { name: "run", keys: ["ShiftRight"] },
-  { name: "jump", keys: ["KeyL"] },
+// Unified keyboard map with ALL controls for both players
+const unifiedKeyboardMap = [
+  // Player 1 controls
+  { name: "p1_forward", keys: ["KeyW"] },
+  { name: "p1_backward", keys: ["KeyS"] },
+  { name: "p1_run", keys: ["ShiftLeft"] },
+  { name: "p1_jump", keys: ["Space", "KeyJ", "KeyF"] },
+  { name: "p1_crouch", keys: ["KeyC"] },
+  
+  // Player 2 controls
+  { name: "p2_forward", keys: ["ArrowUp"] },
+  { name: "p2_backward", keys: ["ArrowDown"] },
+  { name: "p2_run", keys: ["ShiftRight"] },
+  { name: "p2_jump", keys: ["Enter", "KeyL", "KeyK"] },
+  { name: "p2_crouch", keys: ["Slash"] },
 ];
 
 export default function Game() {
@@ -156,7 +157,7 @@ export default function Game() {
       <div className="w-full h-screen flex bg-black">
         {/* Player 1 View - Left Side */}
         <div className="relative w-1/2 h-full">
-          <KeyboardControls map={player1KeyboardMap}>
+          <KeyboardControls map={unifiedKeyboardMap}>
             <Canvas
               shadows
               camera={{ position: [2, 1.5, -2], near: 0.01, fov: 60 }}
@@ -179,7 +180,7 @@ export default function Game() {
           
           {/* Player 1 Label */}
           <div className="absolute top-4 left-56 bg-blue-600 text-white px-4 py-2 rounded-lg font-bold shadow-lg">
-            Player 1 {usePoseControl ? "(Pose Control)" : "(W/S + J)"}
+            Player 1 {usePoseControl ? "(Pose Control)" : "(W/S + Space/J/F + C)"}
           </div>
           
           {/* Pose Debug Display for Player 1 */}
@@ -193,7 +194,7 @@ export default function Game() {
 
         {/* Player 2 View - Right Side */}
         <div className="relative w-1/2 h-full">
-          <KeyboardControls map={player2KeyboardMap}>
+          <KeyboardControls map={unifiedKeyboardMap}>
             <Canvas
               shadows
               camera={{ position: [2, 1.5, -2], near: 0.01, fov: 60 }}
@@ -216,7 +217,7 @@ export default function Game() {
           
           {/* Player 2 Label */}
           <div className="absolute top-4 right-56 bg-red-600 text-white px-4 py-2 rounded-lg font-bold shadow-lg">
-            Player 2 {usePoseControl ? "(Pose Control)" : "(↑/↓ + L)"}
+            Player 2 {usePoseControl ? "(Pose Control)" : "(↑/↓ + Enter/L/K + /)"}
           </div>
           
           {/* Pose Debug Display for Player 2 */}
@@ -233,12 +234,16 @@ export default function Game() {
           <div className="text-sm text-gray-300">
             {usePoseControl ? 
               "Move your body to control characters!" : 
-              "Use keyboard controls to play"
+              "Player 1: W/S/Shift/Space/C | Player 2: ↑/↓/RShift/Enter//"
             }
           </div>
-          {usePoseControl && (
+          {usePoseControl ? (
             <div className="text-xs text-gray-400 mt-1">
               Run • Jump • Crouch • Mountain Climber
+            </div>
+          ) : (
+            <div className="text-xs text-gray-400 mt-1">
+              Forward • Backward • Run • Jump • Crouch
             </div>
           )}
         </div>

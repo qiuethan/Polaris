@@ -60,7 +60,7 @@ class DualPoseTracker:
         self.crouch_buffer_length = 8  # Hold crouch for 8 frames (~0.25 seconds)
         self.mountain_climber_buffer_length = 2  # Hold mountain climber for 2 frames (~0.07 seconds)
         self.run_buffer_length = 0  # No buffer - immediate step detection and reset
-        self.jump_buffer_length = 3  # Hold jump for 3 frames (~0.1 seconds) - quick reset
+        self.jump_buffer_length = 0  # NO BUFFER - jump is instantaneous to prevent double jumping
         
         # Simple immediate action detection - no smoothing needed
     
@@ -474,7 +474,7 @@ class DualPoseTracker:
         print("   🧗 MOUNTAIN CLIMBER: Arms > 165° + Shoulders < 115° + Hip movement > 12°")
         print("   🦵 CROUCH: Both knees bent < 110°")
         print("   🏃 RUN: Alternating knees (20° diff) + Arm movement > 10° + Running stance [RELAXED]")
-        print("   🦘 JUMP: UPWARD movement >18% person height + Cooldown after crouch/climber [STRICTER]")
+        print("   🦘 JUMP: UPWARD movement >8% person height + Cooldown after crouch/climber [MORE SENSITIVE]")
         print("⚡ Instant response with SENSITIVE detection!")
         print("📝 REP COUNTING: Each action automatically counted and logged!")
         print("🔄 Action buffering: Crouch 0.25s | Mountain climber 0.07s | Run INSTANT | Jump 0.1s")

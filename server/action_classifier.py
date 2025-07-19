@@ -184,9 +184,9 @@ def classify_action_simple(angle_history: List[Dict], prev_action: Optional[str]
     # Add cooldown period after crouch or mountain climber, or if action buffer is active
     cooldown_active = prev_action in ["crouch", "mountain_climber"] or action_buffer_active
     
-    if not cooldown_active and len(angle_history) >= 4:  # Need more frames to track movement
+    if not cooldown_active and len(angle_history) >= 3:  # Reduced frames needed for faster detection
         # Get hip positions from previous frames
-        prev_frames = angle_history[-4:]  # Look at last 4 frames
+        prev_frames = angle_history[-3:]  # Look at last 3 frames (faster detection)
         hip_y_positions = []
         body_sizes = []
         
@@ -209,7 +209,7 @@ def classify_action_simple(angle_history: List[Dict], prev_action: Optional[str]
                 body_sizes.append(body_size)
         
         # Check for jump pattern: UPWARD movement + consistent size + proper pose
-        if len(hip_y_positions) >= 3 and len(body_sizes) >= 3:
+        if len(hip_y_positions) >= 2 and len(body_sizes) >= 2:  # Reduced minimum frames for faster detection
             # 1. UPWARD vertical movement only (decreasing Y values = moving up)
             earliest_hip_y = hip_y_positions[0]  # First frame
             latest_hip_y = hip_y_positions[-1]   # Last frame
@@ -221,7 +221,7 @@ def classify_action_simple(angle_history: List[Dict], prev_action: Optional[str]
             avg_body_size = sum(body_sizes) / len(body_sizes)
             if avg_body_size > 0:
                 # Jump threshold relative to person's height (shoulder to hip distance)
-                jump_threshold = avg_body_size * 0.18  # 18% of person's torso height (higher threshold, harder to detect)
+                jump_threshold = avg_body_size * 0.08  # 8% of person's torso height (much more sensitive)
                 is_moving_up = upward_movement > jump_threshold
             else:
                 is_moving_up = False  # Can't detect without body size reference
@@ -378,4 +378,4 @@ if __name__ == "__main__":
     print(f"Priority 1 - Crouch detection: {crouch_action}")    # Should print "crouch"
     print(f"Priority 2 - Mountain climber (HIP MOVEMENT): {climber_action}")  # Should print "mountain_climber"
     print(f"Priority 3 - Running detection: {run_action}")     # Should print "run"
-    print(f"Priority 4 - Jump detection (UPWARD >18% person height + cooldown): {jump_action}")  # Should print "jump" 
+    print(f"Priority 4 - Jump detection (UPWARD >8% person height + cooldown): {jump_action}")  # Should print "jump" 

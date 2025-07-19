@@ -311,10 +311,10 @@ class ActionClassifier:
             return "crouch"
         
         # === JUMP DETECTION ===
-        # Extended knees, ankle movement indicating feet leaving ground (more sensitive)
-        if (features.get('avg_knee_angle', 0) > 140 and
-            features.get('ankle_range', 0) > 0.02 and  # Lower threshold for ankle movement
-            features.get('leg_alternation', 0) < 2):    # Legs move together
+        # Extended knees, ankle movement indicating feet leaving ground (much more sensitive)
+        if (features.get('avg_knee_angle', 0) > 130 and  # Reduced from 140 to 130
+            features.get('ankle_range', 0) > 0.01 and   # Reduced from 0.02 to 0.01 (50% more sensitive)
+            features.get('leg_alternation', 0) < 2):     # Legs move together
             return "jump"
         
         # === MOUNTAIN CLIMBER DETECTION ===
@@ -325,7 +325,7 @@ class ActionClassifier:
             return "mountain_climber"
         
         # === RUN DETECTION ===
-        # Leg alternation, knee movement, hip oscillation (more sensitive)
+        # Leg alternation, knee movement, hip oscillation (original sensitivity)
         if (features.get('leg_alternation', 0) > 1 and
             features.get('knee_angle_std', 0) > 10 and
             features.get('hip_range', 0) > 0.01):
