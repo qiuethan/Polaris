@@ -1,7 +1,10 @@
 import cv2
 import mediapipe as mp
 import numpy as np
+import time
 from joint_angle_extractor import JointAngleFeatureExtractor
+from action_classifier import classify_action_from_history
+from collections import deque
 
 class DualPoseTracker:
     def __init__(self):
@@ -30,49 +33,127 @@ class DualPoseTracker:
         # Initialize joint angle feature extractors for both sides
         self.angle_extractor_left = JointAngleFeatureExtractor()
         self.angle_extractor_right = JointAngleFeatureExtractor()
+        
+        # Action classification setup - separate for each side
+        self.left_angle_history = deque(maxlen=1)   # Store current frame only for immediate detection
+        self.right_angle_history = deque(maxlen=1)  # Store current frame only for immediate detection
+        self.left_action = "unknown"
+        self.right_action = "unknown"
+        
+        # Simple immediate action detection - no smoothing needed
     
     def draw_angle_info(self, frame, angles, side="left"):
-        """Draw joint angle information on the frame - only shows detected angles"""
+        """Draw joint angle information showing BOTH left and right limbs individually"""
         
-        # Choose color and position based on side  
-        valid_color = (255, 0, 0)  # Pure blue for valid angles (BGR format)
-        missing_color = (80, 80, 80)  # Dark gray for missing angles
-        start_y = 50
-        x_offset = 10 if side == "left" else frame.shape[1] - 200
+        # Colors for different limb sides
+        left_limb_color = (255, 100, 0)   # Blue for left limbs (BGR format)
+        right_limb_color = (0, 165, 255)  # Orange for right limbs (BGR format)
+        missing_color = (80, 80, 80)      # Dark gray for missing angles
         
-        # All possible angles we track
-        all_angle_labels = {
-            f"{side}_knee_angle": f"{side.title()} Knee",
-            f"{side}_hip_angle": f"{side.title()} Hip", 
-            f"{side}_ankle_angle": f"{side.title()} Ankle",
-            f"{side}_elbow_angle": f"{side.title()} Elbow",
-            f"{side}_shoulder_angle": f"{side.title()} Shoulder"
-        }
+        start_y = 30
+        x_offset = 10 if side == "left" else frame.shape[1] - 250
+        
+        # Show both left and right limb angles for each joint type
+        joint_types = ['knee', 'hip', 'ankle', 'elbow', 'shoulder']
         
         y_position = start_y
-        detected_count = 0
+        total_detected = 0
         
-        for angle_key, label in all_angle_labels.items():
-            if angle_key in angles and angles[angle_key] is not None:
-                # Angle was successfully calculated
-                angle_value = angles[angle_key]
-                text = f"{label}: {angle_value:.1f}°"
-                color = valid_color
-                detected_count += 1
-            else:
-                # Angle could not be calculated (missing joints)
-                text = f"{label}: N/A"
-                color = missing_color
+        # Header
+        header_text = f"{'Left Half' if side == 'left' else 'Right Half'} - Individual Limbs"
+        cv2.putText(frame, header_text, (x_offset, y_position), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+        y_position += 25
+        
+        for joint_type in joint_types:
+            # Left limb angle
+            left_key = f"left_{joint_type}_angle"
+            right_key = f"right_{joint_type}_angle"
             
-            cv2.putText(frame, text, (x_offset, y_position), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-            y_position += 22
+            # Left limb
+            if left_key in angles and angles[left_key] is not None:
+                left_text = f"L-{joint_type.title()}: {angles[left_key]:.1f}°"
+                left_color = left_limb_color
+                total_detected += 1
+            else:
+                left_text = f"L-{joint_type.title()}: N/A"
+                left_color = missing_color
+            
+            # Right limb  
+            if right_key in angles and angles[right_key] is not None:
+                right_text = f"R-{joint_type.title()}: {angles[right_key]:.1f}°"
+                right_color = right_limb_color
+                total_detected += 1
+            else:
+                right_text = f"R-{joint_type.title()}: N/A"
+                right_color = missing_color
+            
+            # Draw left limb angle
+            cv2.putText(frame, left_text, (x_offset, y_position), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.45, left_color, 2)
+            
+            # Draw right limb angle (offset to the right)
+            cv2.putText(frame, right_text, (x_offset + 120, y_position), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.45, right_color, 2)
+            
+            y_position += 20
         
         # Show detection status
-        status_text = f"{side.title()}: {detected_count}/5 angles"
-        status_color = valid_color if detected_count > 0 else missing_color
+        status_text = f"Detected: {total_detected}/10 limb angles"
+        status_color = left_limb_color if total_detected > 0 else missing_color
         cv2.putText(frame, status_text, (x_offset, y_position + 10), 
                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, status_color, 1)
+        
+        # Add legend
+        legend_y = y_position + 35
+        cv2.putText(frame, "L = Left Limb", (x_offset, legend_y), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.35, left_limb_color, 1)
+        cv2.putText(frame, "R = Right Limb", (x_offset + 100, legend_y), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.35, right_limb_color, 1)
+    
+
+    
+    def draw_action_info(self, frame):
+        """Draw the detected actions for both sides on the frame"""
+        # Action colors
+        action_colors = {
+            "jump": (0, 255, 255),      # Yellow
+            "run": (0, 255, 0),         # Green  
+            "crouch": (255, 0, 255),    # Magenta
+            "mountain_climber": (0, 165, 255),  # Orange
+            "unknown": (128, 128, 128)     # Gray
+        }
+        
+        frame_width = frame.shape[1]
+        frame_height = frame.shape[0]
+        
+        # === LEFT SIDE ACTION ===
+        left_text = f"LEFT: {self.left_action.upper()}"
+        left_color = action_colors.get(self.left_action, (128, 128, 128))
+        
+        # Position on left quarter of frame
+        left_text_size = cv2.getTextSize(left_text, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)[0]
+        left_x = (frame_width // 4) - (left_text_size[0] // 2)
+        left_y = 100
+        
+        # Background rectangle for left action
+        cv2.rectangle(frame, (left_x - 10, left_y - 30), (left_x + left_text_size[0] + 10, left_y + 10), (0, 0, 0), -1)
+        cv2.rectangle(frame, (left_x - 10, left_y - 30), (left_x + left_text_size[0] + 10, left_y + 10), left_color, 2)
+        cv2.putText(frame, left_text, (left_x, left_y), cv2.FONT_HERSHEY_SIMPLEX, 0.8, left_color, 2)
+        
+        # === RIGHT SIDE ACTION ===
+        right_text = f"RIGHT: {self.right_action.upper()}"
+        right_color = action_colors.get(self.right_action, (128, 128, 128))
+        
+        # Position on right quarter of frame
+        right_text_size = cv2.getTextSize(right_text, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)[0]
+        right_x = (3 * frame_width // 4) - (right_text_size[0] // 2)
+        right_y = 100
+        
+        # Background rectangle for right action
+        cv2.rectangle(frame, (right_x - 10, right_y - 30), (right_x + right_text_size[0] + 10, right_y + 10), (0, 0, 0), -1)
+        cv2.rectangle(frame, (right_x - 10, right_y - 30), (right_x + right_text_size[0] + 10, right_y + 10), right_color, 2)
+        cv2.putText(frame, right_text, (right_x, right_y), cv2.FONT_HERSHEY_SIMPLEX, 0.8, right_color, 2)
     
     def process_frame(self, frame):
         """Process a frame and return it with pose landmarks drawn"""
@@ -119,12 +200,42 @@ class DualPoseTracker:
         self.draw_angle_info(left_half, left_angles, "left")
         self.draw_angle_info(right_half, right_angles, "right")
         
+        # === ACTION CLASSIFICATION - SEPARATE FOR EACH SIDE ===
+        # Add to history buffers for each side
+        if left_angles:  # Only add if we have some angle data
+            self.left_angle_history.append(left_angles)
+        
+        if right_angles:  # Only add if we have some angle data
+            self.right_angle_history.append(right_angles)
+        
+        # Run classification every frame for immediate detection
+        if len(self.left_angle_history) >= 1:
+            try:
+                self.left_action = classify_action_from_history(list(self.left_angle_history))
+            except Exception as e:
+                print(f"Left side classification error: {e}")
+                self.left_action = "unknown"
+        else:
+            self.left_action = "unknown"
+        
+        if len(self.right_angle_history) >= 1:
+            try:
+                self.right_action = classify_action_from_history(list(self.right_angle_history))
+            except Exception as e:
+                print(f"Right side classification error: {e}")
+                self.right_action = "unknown"
+        else:
+            self.right_action = "unknown"
+        
         # Add a vertical line to separate the two halves
         cv2.line(left_half, (left_half.shape[1]-1, 0), (left_half.shape[1]-1, height), (0, 255, 0), 2)
         cv2.line(right_half, (0, 0), (0, height), (0, 255, 0), 2)
         
         # Recombine the two halves
         combined_frame = np.hstack((left_half, right_half))
+        
+        # Draw action information on the combined frame
+        self.draw_action_info(combined_frame)
         
         return combined_frame
     
@@ -137,17 +248,54 @@ class DualPoseTracker:
             print("Error: Could not open webcam")
             return
         
-        print("Dual Pose Tracker started. Press ESC to exit.")
-        print("Blue angles = detected joints | Gray angles = missing joints")
+        # Give camera time to initialize and warm up
+        print("Initializing camera, please wait...")
+        time.sleep(2)  # Wait 2 seconds for camera to initialize
+        
+        # Test camera by reading a few frames to ensure it's working
+        print("Testing camera connection...")
+        for i in range(5):
+            ret, test_frame = cap.read()
+            if ret and test_frame is not None:
+                print(f"Camera test {i+1}/5: ✓")
+                time.sleep(0.2)  # Small delay between test reads
+            else:
+                print(f"Camera test {i+1}/5: ✗ (retrying...)")
+                time.sleep(0.5)  # Longer delay on failure
+        
+        print("✨ SIMPLIFIED Dual Pose Tracker started. Press ESC to exit.")
+        print("🔵 Blue = Left limbs | 🟠 Orange = Right limbs | Gray = Missing joints")
+        print("📊 Tracking: Left/Right Knee, Hip, Ankle, Elbow, Shoulder angles")
+        print("🎯 CROUCH DETECTION: Both knees bent < 110°")
+        print("⚡ Instant response - no delays or smoothing!")
         
         try:
+            consecutive_failures = 0
+            max_failures = 10  # Allow up to 10 consecutive failures before giving up
+            
             while True:
                 # Capture frame from webcam
                 ret, frame = cap.read()
                 
                 if not ret:
-                    print("Error: Could not read frame from webcam")
-                    break
+                    consecutive_failures += 1
+                    print(f"Warning: Could not read frame from webcam (attempt {consecutive_failures})")
+                    
+                    if consecutive_failures >= max_failures:
+                        print("Error: Too many consecutive frame read failures. Exiting...")
+                        break
+                    
+                    # Brief pause before retrying
+                    time.sleep(0.1)
+                    continue
+                
+                # Reset failure counter on successful read
+                consecutive_failures = 0
+                
+                # Validate frame is not empty or corrupted
+                if frame is None or frame.size == 0:
+                    print("Warning: Received empty frame, skipping...")
+                    continue
                 
                 # Flip frame horizontally for mirror effect
                 frame = cv2.flip(frame, 1)
@@ -156,8 +304,8 @@ class DualPoseTracker:
                 processed_frame = self.process_frame(frame)
                 
                 # Add title text
-                cv2.putText(processed_frame, "Dual Pose Tracker - Only Real Joint Angles", 
-                           (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                cv2.putText(processed_frame, "Dual Pose Tracker - Joint Angles + Separate Action Detection", 
+                           (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
                 cv2.putText(processed_frame, "Press ESC to exit", 
                            (10, processed_frame.shape[0] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
                 
