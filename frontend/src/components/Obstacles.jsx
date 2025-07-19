@@ -156,8 +156,8 @@ export function ObstacleCourse() {
     const spacing = COURSE_LENGTH / OBSTACLE_DENSITY;
     
     for (let i = 0; i < OBSTACLE_DENSITY; i++) {
-        const z = 5 + (i * spacing); // Start at z=5 instead of further out
-        const obstacleType = Math.random();
+      const z = -8 + (i * spacing); // Start at z=-8 (right at starting position!)
+      const obstacleType = Math.random();
       
       if (obstacleType < 0.4) {
         // Jump barriers (40% chance)
