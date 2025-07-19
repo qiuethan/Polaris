@@ -1,281 +1,249 @@
 'use client';
 
-import { 
-    usePoseWebSocket, 
-    getLeftPlayer, 
-    getRightPlayer,
-    getFormattedHeadAngles,
-    getFormattedArmAngles,
-    getConnectionStatus,
-    getActionEmoji,
-    getTimeSinceUpdate 
-} from '../../api';
+import React from 'react';
+import { usePoseWebSocket, PoseWebSocketProvider } from '../../api/usePoseWebSocket';
+import { getPlayer, getConnectionStatus, getActionEmoji, getTimeSinceUpdate } from '../../api/poseUtils';
 
-export default function WebSocketPage() {
-    const { poseData, connectionStatus, error, reconnect, disconnect, reconnectAttempts } = usePoseWebSocket();
-    
-    const status = getConnectionStatus(connectionStatus);
-    const leftPlayer = getLeftPlayer(poseData);
-    const rightPlayer = getRightPlayer(poseData);
+function WebSocketTestContent() {
+  const { poseData, connectionStatus, error, reconnectAttempts, reconnect, disconnect } = usePoseWebSocket();
+  
+  const connectionInfo = getConnectionStatus(connectionStatus);
+  const player1Data = getPlayer(poseData, 0);
+  const player2Data = getPlayer(poseData, 1);
 
-    return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-3">
-            <div className="max-w-7xl mx-auto">
-                {/* Header */}
-                <div className="text-center mb-4">
-                    <h1 className="text-2xl font-bold text-gray-800 mb-2">
-                        🎯 Pose Tracker WebSocket
-                    </h1>
-                    <p className="text-sm text-gray-600">
-                        Real-time pose tracking data from your camera
-                    </p>
-                </div>
-
-                {/* Connection Status */}
-                <div className="bg-white rounded-lg shadow-md p-4 mb-4">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                            <div className={`text-lg ${status.color}`}>
-                                {status.emoji}
-                            </div>
-                            <div>
-                                <h2 className="text-lg font-semibold">Connection Status</h2>
-                                <p className={`${status.color} font-medium text-sm`}>
-                                    {status.text}
-                                </p>
-                                {reconnectAttempts > 0 && (
-                                    <p className="text-xs text-gray-500">
-                                        Reconnection attempts: {reconnectAttempts}
-                                    </p>
-                                )}
-                            </div>
-                        </div>
-                        
-                        <div className="flex space-x-2">
-                            <button 
-                                onClick={reconnect}
-                                className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-                            >
-                                🔄 Reconnect
-                            </button>
-                            <button 
-                                onClick={disconnect}
-                                className="px-3 py-1 text-sm bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
-                            >
-                                🔌 Disconnect
-                            </button>
-                        </div>
-                    </div>
-                    
-                    {error && (
-                        <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded">
-                            <p className="text-red-700 text-sm">❌ Error: {error}</p>
-                        </div>
-                    )}
-                </div>
-
-                {/* Pose Data */}
-                {poseData ? (
-                    <>
-                        {/* Data Info */}
-                        <div className="bg-white rounded-lg shadow-md p-3 mb-4">
-                            <div className="flex items-center justify-between mb-3">
-                                <h2 className="text-lg font-semibold">📊 Live Data</h2>
-                                <div className="text-xs text-gray-500">
-                                    Last update: {getTimeSinceUpdate(poseData.timestamp)}
-                                </div>
-                            </div>
-                            
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                <div className="bg-green-50 p-3 rounded">
-                                    <div className="text-lg font-bold text-green-600">
-                                        {poseData.players?.length || 0}
-                                    </div>
-                                    <div className="text-sm text-green-700">Players Detected</div>
-                                </div>
-                                
-                                <div className="bg-blue-50 p-3 rounded">
-                                    <div className="text-lg font-bold text-blue-600">
-                                        30 FPS
-                                    </div>
-                                    <div className="text-sm text-blue-700">Update Rate</div>
-                                </div>
-                                
-                                <div className="bg-purple-50 p-3 rounded">
-                                    <div className="text-lg font-bold text-purple-600">
-                                        {Math.round((Date.now() / 1000) - (poseData.timestamp || 0))}ms
-                                    </div>
-                                    <div className="text-sm text-purple-700">Latency</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Players */}
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            {/* Player 1 (Left) */}
-                            <div className="bg-white rounded-lg shadow-md p-4">
-                                <div className="flex items-center justify-between mb-4">
-                                    <h2 className="text-lg font-semibold">🎮 Player 1 (Left)</h2>
-                                    <div className="text-2xl">
-                                        {getActionEmoji(leftPlayer?.action)}
-                                    </div>
-                                </div>
-                                
-                                {leftPlayer ? (
-                                    <div className="space-y-3">
-                                        <div className="bg-gray-50 p-3 rounded">
-                                            <h3 className="font-semibold mb-1 text-sm">Current Action</h3>
-                                            <div className="text-lg font-bold text-blue-600">
-                                                {leftPlayer.action || 'None'}
-                                            </div>
-                                        </div>
-                                        
-                                        <div className="bg-gray-50 p-3 rounded">
-                                            <h3 className="font-semibold mb-1 text-sm">Speed</h3>
-                                            <div className="text-md">
-                                                {leftPlayer.speed} units/s
-                                            </div>
-                                        </div>
-                                        
-                                        <div className="bg-gray-50 p-3 rounded">
-                                            <h3 className="font-semibold mb-1 text-sm">Head Angles</h3>
-                                            <div className="grid grid-cols-3 gap-1 text-xs">
-                                                {(() => {
-                                                    const headAngles = getFormattedHeadAngles(leftPlayer);
-                                                    return (
-                                                        <>
-                                                            <div>Pitch: {headAngles.pitch}</div>
-                                                            <div>Yaw: {headAngles.yaw}</div>
-                                                            <div>Roll: {headAngles.roll}</div>
-                                                        </>
-                                                    );
-                                                })()}
-                                            </div>
-                                        </div>
-                                        
-                                        <div className="bg-gray-50 p-3 rounded">
-                                            <h3 className="font-semibold mb-1 text-sm">Arm Angles</h3>
-                                            <div className="grid grid-cols-2 gap-3 text-xs">
-                                                {(() => {
-                                                    const armAngles = getFormattedArmAngles(leftPlayer);
-                                                    return (
-                                                        <>
-                                                            <div>
-                                                                <div className="font-medium">Left Arm</div>
-                                                                <div>Shoulder: {armAngles.left.shoulder}</div>
-                                                                <div>Elbow: {armAngles.left.elbow}</div>
-                                                            </div>
-                                                            <div>
-                                                                <div className="font-medium">Right Arm</div>
-                                                                <div>Shoulder: {armAngles.right.shoulder}</div>
-                                                                <div>Elbow: {armAngles.right.elbow}</div>
-                                                            </div>
-                                                        </>
-                                                    );
-                                                })()}
-                                            </div>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="text-center py-6 text-gray-500 text-sm">
-                                        No player detected on left side
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Player 2 (Right) */}
-                            <div className="bg-white rounded-lg shadow-md p-4">
-                                <div className="flex items-center justify-between mb-4">
-                                    <h2 className="text-lg font-semibold">🎮 Player 2 (Right)</h2>
-                                    <div className="text-2xl">
-                                        {getActionEmoji(rightPlayer?.action)}
-                                    </div>
-                                </div>
-                                
-                                {rightPlayer ? (
-                                    <div className="space-y-3">
-                                        <div className="bg-gray-50 p-3 rounded">
-                                            <h3 className="font-semibold mb-1 text-sm">Current Action</h3>
-                                            <div className="text-lg font-bold text-green-600">
-                                                {rightPlayer.action || 'None'}
-                                            </div>
-                                        </div>
-                                        
-                                        <div className="bg-gray-50 p-3 rounded">
-                                            <h3 className="font-semibold mb-1 text-sm">Speed</h3>
-                                            <div className="text-md">
-                                                {rightPlayer.speed} units/s
-                                            </div>
-                                        </div>
-                                        
-                                        <div className="bg-gray-50 p-3 rounded">
-                                            <h3 className="font-semibold mb-1 text-sm">Head Angles</h3>
-                                            <div className="grid grid-cols-3 gap-1 text-xs">
-                                                {(() => {
-                                                    const headAngles = getFormattedHeadAngles(rightPlayer);
-                                                    return (
-                                                        <>
-                                                            <div>Pitch: {headAngles.pitch}</div>
-                                                            <div>Yaw: {headAngles.yaw}</div>
-                                                            <div>Roll: {headAngles.roll}</div>
-                                                        </>
-                                                    );
-                                                })()}
-                                            </div>
-                                        </div>
-                                        
-                                        <div className="bg-gray-50 p-3 rounded">
-                                            <h3 className="font-semibold mb-1 text-sm">Arm Angles</h3>
-                                            <div className="grid grid-cols-2 gap-3 text-xs">
-                                                {(() => {
-                                                    const armAngles = getFormattedArmAngles(rightPlayer);
-                                                    return (
-                                                        <>
-                                                            <div>
-                                                                <div className="font-medium">Left Arm</div>
-                                                                <div>Shoulder: {armAngles.left.shoulder}</div>
-                                                                <div>Elbow: {armAngles.left.elbow}</div>
-                                                            </div>
-                                                            <div>
-                                                                <div className="font-medium">Right Arm</div>
-                                                                <div>Shoulder: {armAngles.right.shoulder}</div>
-                                                                <div>Elbow: {armAngles.right.elbow}</div>
-                                                            </div>
-                                                        </>
-                                                    );
-                                                })()}
-                                            </div>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="text-center py-6 text-gray-500 text-sm">
-                                        No player detected on right side
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Raw Data */}
-                        <div className="mt-4 bg-white rounded-lg shadow-md p-4">
-                            <h2 className="text-lg font-semibold mb-3">🔍 Raw Data</h2>
-                            <pre className="bg-gray-100 p-3 rounded overflow-auto text-xs max-h-60">
-                                {JSON.stringify(poseData, null, 2)}
-                            </pre>
-                        </div>
-                    </>
-                ) : (
-                    <div className="bg-white rounded-lg shadow-md p-8 text-center">
-                        <div className="text-4xl mb-3">🔄</div>
-                        <h2 className="text-xl font-semibold mb-2">Waiting for Pose Data</h2>
-                        <p className="text-gray-600 mb-4 text-sm">
-                            Make sure the pose tracking server is running and your camera is connected.
-                        </p>
-                        <div className="text-xs text-gray-500">
-                            Server URL: ws://localhost:8000/ws/pose
-                        </div>
-                    </div>
-                )}
-            </div>
+  return (
+    <div className="min-h-screen bg-gray-900 text-white p-8">
+      <div className="max-w-6xl mx-auto">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold mb-4">🎭 Pose WebSocket Test</h1>
+          <p className="text-gray-300">
+            Test the connection to your pose tracking server before playing the game
+          </p>
         </div>
+
+        {/* Connection Status */}
+        <div className="bg-gray-800 rounded-lg p-6 mb-8">
+          <h2 className="text-2xl font-bold mb-4">Connection Status</h2>
+          <div className="flex items-center gap-4 mb-4">
+            <span className="text-3xl">{connectionInfo.emoji}</span>
+            <div>
+              <div className={`text-lg font-semibold ${connectionInfo.color}`}>
+                {connectionInfo.text}
+              </div>
+              {reconnectAttempts > 0 && (
+                <div className="text-yellow-400 text-sm">
+                  Reconnection attempt: {reconnectAttempts}
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {error && (
+            <div className="bg-red-900 border border-red-700 rounded p-3 mb-4">
+              <div className="font-semibold text-red-200">Error:</div>
+              <div className="text-red-300">{error}</div>
+            </div>
+          )}
+          
+          <div className="flex gap-4">
+            <button 
+              onClick={reconnect}
+              className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded font-semibold"
+            >
+              Reconnect
+            </button>
+            <button 
+              onClick={disconnect}
+              className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded font-semibold"
+            >
+              Disconnect
+            </button>
+            <a 
+              href="/play"
+              className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded font-semibold inline-block"
+            >
+              Launch Game
+            </a>
+          </div>
+        </div>
+
+        {/* Player Data */}
+        {poseData && (
+          <div className="grid md:grid-cols-2 gap-8">
+            {/* Player 1 */}
+            <PlayerDataCard 
+              title="🔵 Player 1 (Left Side)" 
+              playerData={player1Data}
+              playerIndex={0}
+            />
+            
+            {/* Player 2 */}
+            <PlayerDataCard 
+              title="🔴 Player 2 (Right Side)" 
+              playerData={player2Data} 
+              playerIndex={1}
+            />
+          </div>
+        )}
+
+        {/* Debug Information */}
+        {poseData?.debug && (
+          <div className="mt-8 bg-gray-800 rounded-lg p-6">
+            <h2 className="text-2xl font-bold mb-4">Debug Information</h2>
+            <div className="grid md:grid-cols-2 gap-6">
+              <div>
+                <h3 className="font-semibold text-lg mb-2">Left Side Repetitions</h3>
+                <pre className="bg-gray-900 p-3 rounded text-sm">
+                  {JSON.stringify(poseData.debug.left_reps, null, 2)}
+                </pre>
+              </div>
+              <div>
+                <h3 className="font-semibold text-lg mb-2">Right Side Repetitions</h3>
+                <pre className="bg-gray-900 p-3 rounded text-sm">
+                  {JSON.stringify(poseData.debug.right_reps, null, 2)}
+                </pre>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Instructions */}
+        <div className="mt-8 bg-blue-900 border border-blue-700 rounded-lg p-6">
+          <h2 className="text-2xl font-bold mb-4">📋 Instructions</h2>
+          <div className="space-y-3 text-blue-100">
+            <p><strong>1. Start the Server:</strong> Run the pose tracking server with <code className="bg-blue-800 px-2 py-1 rounded">python pose_websocket_server.py</code></p>
+            <p><strong>2. Position Yourself:</strong> Stand in front of your camera, making sure your full body is visible</p>
+            <p><strong>3. Test Actions:</strong> Try the following movements to see if they're detected:</p>
+            <ul className="list-disc list-inside ml-4 space-y-1">
+              <li><strong>🏃 Run:</strong> Run in place with alternating leg movements</li>
+              <li><strong>🦘 Jump:</strong> Jump with both feet off the ground</li>
+              <li><strong>🦵 Crouch:</strong> Squat down with bent knees</li>
+              <li><strong>🧗 Mountain Climber:</strong> Get in plank position and alternate bringing knees to chest</li>
+            </ul>
+            <p><strong>4. Check the Data:</strong> Watch the real-time data above to ensure actions are being detected</p>
+            <p><strong>5. Launch Game:</strong> Click "Launch Game" above to start playing with pose controls!</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PlayerDataCard({ title, playerData, playerIndex }) {
+  if (!playerData) {
+    return (
+      <div className="bg-gray-800 rounded-lg p-6">
+        <h2 className="text-xl font-bold mb-4">{title}</h2>
+        <div className="text-gray-400 text-center py-8">
+          No data available for this player
+        </div>
+      </div>
     );
+  }
+
+  return (
+    <div className="bg-gray-800 rounded-lg p-6">
+      <h2 className="text-xl font-bold mb-4">{title}</h2>
+      
+      {/* Current Action */}
+      <div className="bg-gray-700 rounded p-4 mb-4">
+        <h3 className="font-semibold mb-2">Current Action</h3>
+        <div className="flex items-center gap-3">
+          <span className="text-4xl">{getActionEmoji(playerData.action)}</span>
+          <div>
+            <div className="text-lg capitalize text-green-400">
+              {playerData.action || "none"}
+            </div>
+            <div className="text-sm text-gray-400">
+              Speed: {playerData.speed?.toFixed(1) || 0}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Head Angles */}
+      <div className="bg-gray-700 rounded p-4 mb-4">
+        <h3 className="font-semibold mb-2">Head Tracking</h3>
+        <div className="grid grid-cols-3 gap-3 text-sm">
+          <div className="text-center">
+            <div className="text-gray-400">Pitch</div>
+            <div className="text-blue-400 font-mono">
+              {playerData.head?.pitch !== null ? `${playerData.head.pitch.toFixed(1)}°` : 'N/A'}
+            </div>
+          </div>
+          <div className="text-center">
+            <div className="text-gray-400">Yaw</div>
+            <div className="text-green-400 font-mono">
+              {playerData.head?.yaw !== null ? `${playerData.head.yaw.toFixed(1)}°` : 'N/A'}
+            </div>
+          </div>
+          <div className="text-center">
+            <div className="text-gray-400">Roll</div>
+            <div className="text-purple-400 font-mono">
+              {playerData.head?.roll !== null ? `${playerData.head.roll.toFixed(1)}°` : 'N/A'}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Arm Angles */}
+      <div className="bg-gray-700 rounded p-4 mb-4">
+        <h3 className="font-semibold mb-2">Arm Tracking</h3>
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          <div>
+            <div className="text-gray-400 mb-1">Left Arm</div>
+            <div className="space-y-1">
+              <div className="flex justify-between">
+                <span>Shoulder:</span>
+                <span className="text-blue-400 font-mono">
+                  {playerData.arms?.left?.shoulder_angle !== null ? 
+                    `${playerData.arms.left.shoulder_angle.toFixed(1)}°` : 'N/A'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Elbow:</span>
+                <span className="text-cyan-400 font-mono">
+                  {playerData.arms?.left?.elbow_angle !== null ? 
+                    `${playerData.arms.left.elbow_angle.toFixed(1)}°` : 'N/A'}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div className="text-gray-400 mb-1">Right Arm</div>
+            <div className="space-y-1">
+              <div className="flex justify-between">
+                <span>Shoulder:</span>
+                <span className="text-red-400 font-mono">
+                  {playerData.arms?.right?.shoulder_angle !== null ? 
+                    `${playerData.arms.right.shoulder_angle.toFixed(1)}°` : 'N/A'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Elbow:</span>
+                <span className="text-orange-400 font-mono">
+                  {playerData.arms?.right?.elbow_angle !== null ? 
+                    `${playerData.arms.right.elbow_angle.toFixed(1)}°` : 'N/A'}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Timestamp */}
+      <div className="text-xs text-gray-400 text-center">
+        Last Update: {getTimeSinceUpdate(playerData.timestamp)}
+      </div>
+    </div>
+  );
+} 
+
+export default function WebSocketTestPage() {
+  return (
+    <PoseWebSocketProvider>
+      <WebSocketTestContent />
+    </PoseWebSocketProvider>
+  );
 } 

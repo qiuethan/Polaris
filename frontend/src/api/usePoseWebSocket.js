@@ -1,26 +1,12 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, createContext, useContext } from 'react';
+
+// Create WebSocket Context
+const PoseWebSocketContext = createContext(null);
 
 /**
- * React hook for connecting to the pose tracking WebSocket server
- * 
- * @param {string} url - WebSocket URL (default: ws://localhost:8000/ws/pose)
- * @param {Object} options - Configuration options
- * @param {number} options.maxReconnectAttempts - Maximum reconnection attempts (default: 5)
- * @param {number} options.reconnectInterval - Base reconnection interval in ms (default: 1000)
- * @param {boolean} options.autoReconnect - Enable auto-reconnection (default: true)
- * 
- * @returns {Object} Hook state and methods
- * @returns {Object|null} poseData - Latest pose data from server
- * @returns {string} connectionStatus - 'connecting' | 'connected' | 'disconnected' | 'error'
- * @returns {string|null} error - Error message if any
- * @returns {Function} reconnect - Manual reconnection function
- * @returns {Function} disconnect - Manual disconnection function
- * @returns {number} reconnectAttempts - Current number of reconnection attempts
+ * WebSocket Context Provider - Creates ONE connection shared by all components
  */
-export const usePoseWebSocket = (
-    url = 'ws://localhost:8000/ws/pose',
-    options = {}
-) => {
+export const PoseWebSocketProvider = ({ children, url = 'ws://localhost:8000/ws/pose', options = {} }) => {
     const {
         maxReconnectAttempts = 5,
         reconnectInterval = 1000,
@@ -61,7 +47,8 @@ export const usePoseWebSocket = (
             ws.current = new WebSocket(url);
 
             ws.current.onopen = () => {
-                console.log('🔌 Connected to pose tracker!');
+                console.log('🔌 Connected to pose tracker! (SHARED CONNECTION)');
+                console.warn('⚠️  If you see this message multiple times, there\'s a bug in the context provider!');
                 setConnectionStatus('connected');
                 setError(null);
                 setReconnectAttempts(0);
@@ -159,7 +146,7 @@ export const usePoseWebSocket = (
         };
     }, [connect, clearReconnectTimeout]);
 
-    return {
+    const contextValue = {
         poseData,
         connectionStatus,
         error,
@@ -167,6 +154,31 @@ export const usePoseWebSocket = (
         disconnect,
         reconnectAttempts
     };
+
+    return (
+        <PoseWebSocketContext.Provider value={contextValue}>
+            {children}
+        </PoseWebSocketContext.Provider>
+    );
 };
 
-export default usePoseWebSocket; 
+/**
+ * React hook for accessing the shared WebSocket connection
+ * 
+ * @returns {Object} Hook state and methods
+ * @returns {Object|null} poseData - Latest pose data from server
+ * @returns {string} connectionStatus - 'connecting' | 'connected' | 'disconnected' | 'error'
+ * @returns {string|null} error - Error message if any
+ * @returns {Function} reconnect - Manual reconnection function
+ * @returns {Function} disconnect - Manual disconnection function
+ * @returns {number} reconnectAttempts - Current number of reconnection attempts
+ */
+export const usePoseWebSocket = () => {
+    const context = useContext(PoseWebSocketContext);
+    
+    if (!context) {
+        throw new Error('usePoseWebSocket must be used within a PoseWebSocketProvider');
+    }
+    
+    return context;
+}; 

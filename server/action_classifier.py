@@ -133,8 +133,8 @@ def classify_action_simple(angle_history: List[Dict], prev_action: Optional[str]
     alternating_knees = False
     if (left_knee is not None and right_knee is not None):
         knee_difference = abs(left_knee - right_knee)
-        # Moderate difference for natural running motion
-        alternating_knees = (knee_difference > 25)  # 25° difference - catches natural running
+        # Relaxed difference for easier natural running motion detection
+        alternating_knees = (knee_difference > 20)  # 20° difference - more lenient for natural running
     
     # 2. Basic arm movement detection (simpler approach)
     arm_movement = False
@@ -144,15 +144,15 @@ def classify_action_simple(angle_history: List[Dict], prev_action: Optional[str]
         prev_left_elbow = prev_frame.get('left_elbow_angle')
         prev_right_elbow = prev_frame.get('right_elbow_angle')
         
-        # Substantial arm movement check - filter out noise, detect real arm swing
+        # Relaxed arm movement check - easier to detect arm swing for running
         if (left_elbow is not None and prev_left_elbow is not None):
             left_elbow_change = abs(left_elbow - prev_left_elbow)
-            if left_elbow_change > 15:  # Increased from 8° to filter noise
+            if left_elbow_change > 10:  # Reduced from 15° for easier detection
                 arm_movement = True
         
         if (right_elbow is not None and prev_right_elbow is not None):
             right_elbow_change = abs(right_elbow - prev_right_elbow)
-            if right_elbow_change > 15:  # Increased from 8° to filter noise
+            if right_elbow_change > 10:  # Reduced from 15° for easier detection
                 arm_movement = True
         
         # If we can't detect arm movement at all, focus on legs only with higher threshold
@@ -221,7 +221,7 @@ def classify_action_simple(angle_history: List[Dict], prev_action: Optional[str]
             avg_body_size = sum(body_sizes) / len(body_sizes)
             if avg_body_size > 0:
                 # Jump threshold relative to person's height (shoulder to hip distance)
-                jump_threshold = avg_body_size * 0.12  # 12% of person's torso height (balanced sensitivity)
+                jump_threshold = avg_body_size * 0.18  # 18% of person's torso height (higher threshold, harder to detect)
                 is_moving_up = upward_movement > jump_threshold
             else:
                 is_moving_up = False  # Can't detect without body size reference
@@ -317,19 +317,19 @@ if __name__ == "__main__":
         }
     ]
     
-    # Example 3: Running data - moderate movements for natural running
+    # Example 3: Running data - relaxed requirements for easier detection
     running_frames = [
         {
             "left_knee_angle": 155.0,      # One leg straighter (running stance)
-            "right_knee_angle": 125.0,     # Other leg bent (30° difference > 25°)
+            "right_knee_angle": 125.0,     # Other leg bent (30° difference > 20°)
             "left_elbow_angle": 130.0,     # Arm position
             "right_elbow_angle": 160.0,    # Arm swinging
         },
         {
             "left_knee_angle": 130.0,      # Leg switched - now bent
-            "right_knee_angle": 160.0,     # Other leg straighter (30° difference > 25°)
-            "left_elbow_angle": 150.0,     # Arm moved (20° change > 15°)
-            "right_elbow_angle": 140.0,    # Arm moved (20° change > 15°)
+            "right_knee_angle": 160.0,     # Other leg straighter (30° difference > 20°)
+            "left_elbow_angle": 150.0,     # Arm moved (20° change > 10°)
+            "right_elbow_angle": 140.0,    # Arm moved (20° change > 10°)
         }
     ]
     
@@ -378,4 +378,4 @@ if __name__ == "__main__":
     print(f"Priority 1 - Crouch detection: {crouch_action}")    # Should print "crouch"
     print(f"Priority 2 - Mountain climber (HIP MOVEMENT): {climber_action}")  # Should print "mountain_climber"
     print(f"Priority 3 - Running detection: {run_action}")     # Should print "run"
-    print(f"Priority 4 - Jump detection (UPWARD >12% person height + cooldown): {jump_action}")  # Should print "jump" 
+    print(f"Priority 4 - Jump detection (UPWARD >18% person height + cooldown): {jump_action}")  # Should print "jump" 

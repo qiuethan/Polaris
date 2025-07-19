@@ -9,6 +9,9 @@ import { Vector3 } from "three";
 import { proxy } from "valtio";
 import { useControls } from "leva";
 import { CharacterController } from "./CharacterController";
+import { PoseCharacterController } from "./PoseCharacterController";
+import { PoseDebugDisplay } from "./PoseDebugDisplay";
+import { PoseWebSocketProvider } from "../api/usePoseWebSocket";
 import { Map } from "./Map";
 import { Minimap, maps } from "./Minimap";
 import { DualLaneSystem } from "./DualLaneSystem";
@@ -32,7 +35,7 @@ export const GameState = proxy({
 });
 
 // Shared Scene Components
-function SharedScene({ playerId }) {
+function SharedScene({ playerId, usePoseControl = false }) {
   const { map, physicsDebug } = useControls("Map & Debug", {
     map: {
       value: "medieval_fantasy_book",
@@ -51,6 +54,8 @@ function SharedScene({ playerId }) {
     GameState.player2.pathProgress = 0.1;
     console.log("Map changed to:", map, "- Resetting player path progress");
   }, [map]);
+  
+  const CharacterComponent = usePoseControl ? PoseCharacterController : CharacterController;
   
   return (
     <>
@@ -83,13 +88,13 @@ function SharedScene({ playerId }) {
         model={`models/${map}.glb`}
       />
       
-      {/* Characters - simple straight lanes */}
-      <CharacterController 
+      {/* Characters - using the selected control method */}
+      <CharacterComponent 
         playerId="player1" 
         isControlled={playerId === "player1"}
         color="#3b82f6"
       />
-      <CharacterController 
+      <CharacterComponent 
         playerId="player2" 
         isControlled={playerId === "player2"}
         color="#ef4444"
@@ -114,7 +119,7 @@ function SharedScene({ playerId }) {
   );
 }
 
-// Player 1 controls (WASD + Shift + Space)
+// Player 1 controls (WASD + Shift + Space) - for keyboard fallback
 const player1KeyboardMap = [
   { name: "forward", keys: ["KeyW"] },
   { name: "backward", keys: ["KeyS"] },
@@ -122,7 +127,7 @@ const player1KeyboardMap = [
   { name: "jump", keys: ["KeyJ"] },
 ];
 
-// Player 2 controls (Arrow keys + Right Shift + Enter)
+// Player 2 controls (Arrow keys + Right Shift + Enter) - for keyboard fallback
 const player2KeyboardMap = [
   { name: "forward", keys: ["ArrowUp"] },
   { name: "backward", keys: ["ArrowDown"] },
@@ -131,72 +136,113 @@ const player2KeyboardMap = [
 ];
 
 export default function Game() {
-  const { physicsDebug } = useControls("Map & Debug", {
-    physicsDebug: { value: false }
+  const { physicsDebug, controlMode, showPoseDebug } = useControls("Map & Debug", {
+    physicsDebug: { value: false },
+    controlMode: {
+      value: "pose",
+      options: ["keyboard", "pose"],
+      label: "Control Mode"
+    },
+    showPoseDebug: {
+      value: true,
+      label: "Show Pose Debug"
+    }
   });
 
+  const usePoseControl = controlMode === "pose";
+
   return (
-    <div className="w-full h-screen flex bg-black">
-      {/* Player 1 View - Left Side */}
-      <div className="relative w-1/2 h-full">
-        <KeyboardControls map={player1KeyboardMap}>
-          <Canvas
-            shadows
-            camera={{ position: [2, 1.5, -2], near: 0.01, fov: 60 }}
-            gl={{ antialias: true }}
-          >
-            <Suspense fallback={null}>
-              <Physics debug={physicsDebug} gravity={[0, -30, 0]}>
-                <SharedScene playerId="player1" />
-              </Physics>
-            </Suspense>
-          </Canvas>
-        </KeyboardControls>
-        
-        {/* Player 1 Minimap */}
-        <div className="absolute w-48 h-48 top-4 left-4 shadow-2xl border-2 border-white rounded-lg overflow-hidden">
-          <Canvas gl={{ antialias: false }}>
-            <Minimap playerId="player1" />
-          </Canvas>
+    <PoseWebSocketProvider>
+      <div className="w-full h-screen flex bg-black">
+        {/* Player 1 View - Left Side */}
+        <div className="relative w-1/2 h-full">
+          <KeyboardControls map={player1KeyboardMap}>
+            <Canvas
+              shadows
+              camera={{ position: [2, 1.5, -2], near: 0.01, fov: 60 }}
+              gl={{ antialias: true }}
+            >
+              <Suspense fallback={null}>
+                <Physics debug={physicsDebug} gravity={[0, -30, 0]}>
+                  <SharedScene playerId="player1" usePoseControl={usePoseControl} />
+                </Physics>
+              </Suspense>
+            </Canvas>
+          </KeyboardControls>
+          
+          {/* Player 1 Minimap */}
+          <div className="absolute w-48 h-48 top-4 left-4 shadow-2xl border-2 border-white rounded-lg overflow-hidden">
+            <Canvas gl={{ antialias: false }}>
+              <Minimap playerId="player1" />
+            </Canvas>
+          </div>
+          
+          {/* Player 1 Label */}
+          <div className="absolute top-4 left-56 bg-blue-600 text-white px-4 py-2 rounded-lg font-bold shadow-lg">
+            Player 1 {usePoseControl ? "(Pose Control)" : "(W/S + J)"}
+          </div>
+          
+          {/* Pose Debug Display for Player 1 */}
+          {showPoseDebug && usePoseControl && (
+            <PoseDebugDisplay playerId="player1" position="bottom-left" />
+          )}
+        </div>
+
+        {/* Divider */}
+        <div className="w-1 bg-white" />
+
+        {/* Player 2 View - Right Side */}
+        <div className="relative w-1/2 h-full">
+          <KeyboardControls map={player2KeyboardMap}>
+            <Canvas
+              shadows
+              camera={{ position: [2, 1.5, -2], near: 0.01, fov: 60 }}
+              gl={{ antialias: true }}
+            >
+              <Suspense fallback={null}>
+                <Physics debug={physicsDebug} gravity={[0, -30, 0]}>
+                  <SharedScene playerId="player2" usePoseControl={usePoseControl} />
+                </Physics>
+              </Suspense>
+            </Canvas>
+          </KeyboardControls>
+          
+          {/* Player 2 Minimap */}
+          <div className="absolute w-48 h-48 top-4 right-4 shadow-2xl border-2 border-white rounded-lg overflow-hidden">
+            <Canvas gl={{ antialias: false }}>
+              <Minimap playerId="player2" />
+            </Canvas>
+          </div>
+          
+          {/* Player 2 Label */}
+          <div className="absolute top-4 right-56 bg-red-600 text-white px-4 py-2 rounded-lg font-bold shadow-lg">
+            Player 2 {usePoseControl ? "(Pose Control)" : "(↑/↓ + L)"}
+          </div>
+          
+          {/* Pose Debug Display for Player 2 */}
+          {showPoseDebug && usePoseControl && (
+            <PoseDebugDisplay playerId="player2" position="bottom-right" />
+          )}
         </div>
         
-        {/* Player 1 Label */}
-        <div className="absolute top-4 left-56 bg-blue-600 text-white px-4 py-2 rounded-lg font-bold shadow-lg">
-          Player 1 (W/S + Space)
+        {/* Global Control Info */}
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black bg-opacity-80 text-white px-4 py-2 rounded-lg font-bold text-center pointer-events-none">
+          <div className="text-lg mb-1">
+            {usePoseControl ? "🎭 POSE CONTROL MODE" : "⌨️ KEYBOARD MODE"}
+          </div>
+          <div className="text-sm text-gray-300">
+            {usePoseControl ? 
+              "Move your body to control characters!" : 
+              "Use keyboard controls to play"
+            }
+          </div>
+          {usePoseControl && (
+            <div className="text-xs text-gray-400 mt-1">
+              Run • Jump • Crouch • Mountain Climber
+            </div>
+          )}
         </div>
       </div>
-
-      {/* Divider */}
-      <div className="w-1 bg-white" />
-
-      {/* Player 2 View - Right Side */}
-      <div className="relative w-1/2 h-full">
-        <KeyboardControls map={player2KeyboardMap}>
-          <Canvas
-            shadows
-            camera={{ position: [2, 1.5, -2], near: 0.01, fov: 60 }}
-            gl={{ antialias: true }}
-          >
-            <Suspense fallback={null}>
-              <Physics debug={physicsDebug} gravity={[0, -30, 0]}>
-                <SharedScene playerId="player2" />
-              </Physics>
-            </Suspense>
-          </Canvas>
-        </KeyboardControls>
-        
-        {/* Player 2 Minimap */}
-        <div className="absolute w-48 h-48 top-4 right-4 shadow-2xl border-2 border-white rounded-lg overflow-hidden">
-          <Canvas gl={{ antialias: false }}>
-            <Minimap playerId="player2" />
-          </Canvas>
-        </div>
-        
-        {/* Player 2 Label */}
-        <div className="absolute top-4 right-56 bg-red-600 text-white px-4 py-2 rounded-lg font-bold shadow-lg">
-          Player 2 (↑/↓ + Enter)
-        </div>
-      </div>
-    </div>
+    </PoseWebSocketProvider>
   );
 }

@@ -12,6 +12,9 @@ import uvicorn
 # Import our pose tracking modules
 from dual_pose_tracker import DualPoseTracker
 
+# Configuration for WebSocket broadcast frequency
+WEBSOCKET_BROADCAST_FPS = 10  # Reduce from 30 FPS to prevent lag (recommended: 8-12 FPS)
+
 app = FastAPI(title="Pose Tracker WebSocket Server")
 
 # Add CORS middleware
@@ -174,6 +177,13 @@ async def camera_loop():
     
     print("✅ Camera ready")
     
+    # Throttling variables for WebSocket broadcasts
+    frame_counter = 0
+    broadcast_every_n_frames = 30 // WEBSOCKET_BROADCAST_FPS  # Calculate based on config
+    broadcast_fps = 30 // broadcast_every_n_frames
+    print(f"🌐 WebSocket broadcast rate: {broadcast_fps} FPS (reduced from 30 FPS to prevent lag)")
+    print(f"📷 Camera processing: 30 FPS (full rate for smooth detection)")
+    
     try:
         while True:
             ret, frame = cap.read()
@@ -183,22 +193,26 @@ async def camera_loop():
             
             frame = cv2.flip(frame, 1)
             
-            # Process frame to extract pose data and get visual output
+            # Always process frame for smooth pose detection and display
             processed_frame = pose_tracker.process_frame(frame)
             
             # Display the processed frame with pose landmarks
             cv2.imshow('Dual Pose Tracker - WebSocket Server', processed_frame)
             
-            # Extract and broadcast pose data
-            pose_data = extract_pose_data(pose_tracker)
-            await manager.broadcast(pose_data)
+            # Only broadcast pose data every N frames to reduce network load
+            frame_counter += 1
+            if frame_counter >= broadcast_every_n_frames:
+                if manager.active_connections:  # Only extract/broadcast if there are clients
+                    pose_data = extract_pose_data(pose_tracker)
+                    await manager.broadcast(pose_data)
+                frame_counter = 0  # Reset counter
             
             # Check for ESC key to exit (non-blocking)
             if cv2.waitKey(1) & 0xFF == 27:  # ESC key
                 print("🔑 ESC pressed - stopping camera...")
                 break
             
-            # Control frame rate (30 FPS)
+            # Control frame rate (30 FPS for smooth pose processing)
             await asyncio.sleep(1/30)
             
     except asyncio.CancelledError:
@@ -233,14 +247,21 @@ async def shutdown():
 @app.websocket("/ws/pose")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
-    print(f"🔌 Client connected. Total: {len(manager.active_connections)}")
+    client_ip = websocket.client.host if websocket.client else "unknown"
+    print(f"🔌 Client connected from {client_ip}. Total connections: {len(manager.active_connections)}")
     
     try:
         while True:
+            # Just receive and ignore any messages from client
+            # This keeps the connection alive and detects disconnections
             await websocket.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(websocket)
-        print(f"🔌 Client disconnected. Total: {len(manager.active_connections)}")
+        print(f"🔌 Client from {client_ip} disconnected. Total connections: {len(manager.active_connections)}")
+    except Exception as e:
+        print(f"❌ WebSocket error with client {client_ip}: {e}")
+        manager.disconnect(websocket)
+        print(f"🔌 Client from {client_ip} disconnected due to error. Total connections: {len(manager.active_connections)}")
 
 @app.get("/")
 async def root():
