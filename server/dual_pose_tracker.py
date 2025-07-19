@@ -44,11 +44,20 @@ class DualPoseTracker:
         self.prev_left_action = "unknown"
         self.prev_right_action = "unknown"
         
+        # Rep counters for each action type
+        self.left_run_reps = 0
+        self.right_run_reps = 0
+        self.left_crouch_reps = 0
+        self.right_crouch_reps = 0
+        self.left_mountain_climber_reps = 0
+        self.right_mountain_climber_reps = 0
+        
         # Action buffers to prevent flickering (hold state for a few frames)
         self.left_action_buffer = 0   # Frames remaining to hold current action
         self.right_action_buffer = 0  # Frames remaining to hold current action
         self.crouch_buffer_length = 8  # Hold crouch for 8 frames (~0.25 seconds)
         self.mountain_climber_buffer_length = 2  # Hold mountain climber for 2 frames (~0.07 seconds)
+        self.run_buffer_length = 0  # No buffer - immediate step detection and reset
         
         # Simple immediate action detection - no smoothing needed
     
@@ -243,6 +252,8 @@ class DualPoseTracker:
             self.left_action = raw_left_action
             if raw_left_action == "mountain_climber":
                 self.left_action_buffer = self.mountain_climber_buffer_length
+            elif raw_left_action == "run":
+                self.left_action_buffer = self.run_buffer_length
             else:  # crouch or other actions
                 self.left_action_buffer = self.crouch_buffer_length
         elif self.left_action_buffer > 0:
@@ -258,6 +269,8 @@ class DualPoseTracker:
             self.right_action = raw_right_action
             if raw_right_action == "mountain_climber":
                 self.right_action_buffer = self.mountain_climber_buffer_length
+            elif raw_right_action == "run":
+                self.right_action_buffer = self.run_buffer_length
             else:  # crouch or other actions
                 self.right_action_buffer = self.crouch_buffer_length
         elif self.right_action_buffer > 0:
@@ -267,20 +280,30 @@ class DualPoseTracker:
             # Buffer expired, reset to unknown
             self.right_action = "unknown"
         
-        # === LOG NEW ACTION INSTANCES ===
+        # === LOG NEW ACTION INSTANCES & COUNT REPS ===
         # Left side - detect transitions from unknown to action
         if self.prev_left_action == "unknown" and self.left_action != "unknown":
             if self.left_action == "crouch":
-                print("🦵 LEFT SIDE: 1 crouch detected!")
+                self.left_crouch_reps += 1
+                print(f"🦵 LEFT SIDE: Crouch #{self.left_crouch_reps}")
             elif self.left_action == "mountain_climber":
-                print("🧗 LEFT SIDE: 1 mountain climber kick detected!")
+                self.left_mountain_climber_reps += 1
+                print(f"🧗 LEFT SIDE: Mountain climber kick #{self.left_mountain_climber_reps}")
+            elif self.left_action == "run":
+                self.left_run_reps += 1
+                print(f"🏃 LEFT SIDE: Running step #{self.left_run_reps}")
         
         # Right side - detect transitions from unknown to action  
         if self.prev_right_action == "unknown" and self.right_action != "unknown":
             if self.right_action == "crouch":
-                print("🦵 RIGHT SIDE: 1 crouch detected!")
+                self.right_crouch_reps += 1
+                print(f"🦵 RIGHT SIDE: Crouch #{self.right_crouch_reps}")
             elif self.right_action == "mountain_climber":
-                print("🧗 RIGHT SIDE: 1 mountain climber kick detected!")
+                self.right_mountain_climber_reps += 1
+                print(f"🧗 RIGHT SIDE: Mountain climber kick #{self.right_mountain_climber_reps}")
+            elif self.right_action == "run":
+                self.right_run_reps += 1
+                print(f"🏃 RIGHT SIDE: Running step #{self.right_run_reps}")
         
         # Update previous actions for next frame
         self.prev_left_action = self.left_action
@@ -327,10 +350,11 @@ class DualPoseTracker:
         print("📊 Tracking: Left/Right Knee, Hip, Ankle, Elbow, Shoulder angles")
         print("🎯 ACTION DETECTION:")
         print("   🦵 CROUCH: Both knees bent < 110°")
-        print("   🧗 MOUNTAIN CLIMBER: Arms > 150° + Shoulders < 130° + Hip movement > 7°")
+        print("   🧗 MOUNTAIN CLIMBER: Arms > 165° + Shoulders < 115° + Hip movement > 12°")
+        print("   🏃 RUN: Alternating knees (25° diff) + Arm movement > 15° + Running stance")
         print("⚡ Instant response with SENSITIVE detection!")
-        print("📝 Console logging: Each new action instance will be logged!")
-        print("🔄 Action buffering: Crouch 0.25s | Mountain climber 0.07s (ultra-fast)")
+        print("📝 REP COUNTING: Each action automatically counted and logged!")
+        print("🔄 Action buffering: Crouch 0.25s | Mountain climber 0.07s | Run INSTANT (no buffer!)")
         
         try:
             consecutive_failures = 0
@@ -385,6 +409,13 @@ class DualPoseTracker:
             print("Interrupted by user")
         
         finally:
+            # Display workout summary
+            print("\n🏋️ WORKOUT SUMMARY:")
+            print(f"🏃 Running Steps: Left {self.left_run_reps} | Right {self.right_run_reps} | Total {self.left_run_reps + self.right_run_reps}")
+            print(f"🦵 Crouches: Left {self.left_crouch_reps} | Right {self.right_crouch_reps} | Total {self.left_crouch_reps + self.right_crouch_reps}")
+            print(f"🧗 Mountain Climbers: Left {self.left_mountain_climber_reps} | Right {self.right_mountain_climber_reps} | Total {self.left_mountain_climber_reps + self.right_mountain_climber_reps}")
+            print("Thanks for working out! 💪")
+            
             # Clean up
             cap.release()
             cv2.destroyAllWindows()
