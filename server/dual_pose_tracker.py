@@ -44,6 +44,12 @@ class DualPoseTracker:
         self.prev_left_action = "unknown"
         self.prev_right_action = "unknown"
         
+        # Action buffers to prevent flickering (hold state for a few frames)
+        self.left_action_buffer = 0   # Frames remaining to hold current action
+        self.right_action_buffer = 0  # Frames remaining to hold current action
+        self.crouch_buffer_length = 8  # Hold crouch for 8 frames (~0.25 seconds)
+        self.mountain_climber_buffer_length = 2  # Hold mountain climber for 2 frames (~0.07 seconds)
+        
         # Simple immediate action detection - no smoothing needed
     
     def draw_angle_info(self, frame, angles, side="left"):
@@ -213,22 +219,52 @@ class DualPoseTracker:
             self.right_angle_history.append(right_angles)
         
         # Run classification every frame for immediate detection
+        raw_left_action = "unknown"
+        raw_right_action = "unknown"
+        
         if len(self.left_angle_history) >= 1:
             try:
-                self.left_action = classify_action_from_history(list(self.left_angle_history))
+                raw_left_action = classify_action_from_history(list(self.left_angle_history))
             except Exception as e:
                 print(f"Left side classification error: {e}")
-                self.left_action = "unknown"
-        else:
-            self.left_action = "unknown"
+                raw_left_action = "unknown"
         
         if len(self.right_angle_history) >= 1:
             try:
-                self.right_action = classify_action_from_history(list(self.right_angle_history))
+                raw_right_action = classify_action_from_history(list(self.right_angle_history))
             except Exception as e:
                 print(f"Right side classification error: {e}")
-                self.right_action = "unknown"
+                raw_right_action = "unknown"
+        
+        # === BUFFERED ACTION DETECTION ===
+        # Left side buffering
+        if raw_left_action != "unknown":
+            # New action detected, set it and start buffer with action-specific length
+            self.left_action = raw_left_action
+            if raw_left_action == "mountain_climber":
+                self.left_action_buffer = self.mountain_climber_buffer_length
+            else:  # crouch or other actions
+                self.left_action_buffer = self.crouch_buffer_length
+        elif self.left_action_buffer > 0:
+            # Buffer active, keep current action and decrement
+            self.left_action_buffer -= 1
         else:
+            # Buffer expired, reset to unknown
+            self.left_action = "unknown"
+        
+        # Right side buffering
+        if raw_right_action != "unknown":
+            # New action detected, set it and start buffer with action-specific length
+            self.right_action = raw_right_action
+            if raw_right_action == "mountain_climber":
+                self.right_action_buffer = self.mountain_climber_buffer_length
+            else:  # crouch or other actions
+                self.right_action_buffer = self.crouch_buffer_length
+        elif self.right_action_buffer > 0:
+            # Buffer active, keep current action and decrement
+            self.right_action_buffer -= 1
+        else:
+            # Buffer expired, reset to unknown
             self.right_action = "unknown"
         
         # === LOG NEW ACTION INSTANCES ===
@@ -294,6 +330,7 @@ class DualPoseTracker:
         print("   🧗 MOUNTAIN CLIMBER: Arms > 150° + Shoulders < 130° + Hip movement > 7°")
         print("⚡ Instant response with SENSITIVE detection!")
         print("📝 Console logging: Each new action instance will be logged!")
+        print("🔄 Action buffering: Crouch 0.25s | Mountain climber 0.07s (ultra-fast)")
         
         try:
             consecutive_failures = 0
