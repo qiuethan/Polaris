@@ -84,14 +84,14 @@ export const PoseCharacterController = ({
   useEffect(() => {
     if (isCrouching && rb.current && isGrounded) {
       const currentVel = rb.current.linvel();
-      // Give a tiny forward boost when starting to crouch
-      const crouchBoost = Math.max(currentVel.z + 0.2, 0.5); // Add 0.2 to current speed or min 0.5 (very gentle)
+      // Give a useful forward boost when starting to crouch
+      const crouchBoost = Math.max(currentVel.z + 3, 6); // Add 3 to current speed or min 6 for obstacle momentum
       rb.current.setLinvel({
         x: currentVel.x,
         y: currentVel.y,
         z: crouchBoost
       }, true);
-      console.log(`🐌 [${playerId}] GENTLE CROUCH CRAWL! Z velocity: ${crouchBoost} (+0.2 speed)`);
+      console.log(`🛷 [${playerId}] CROUCH SLIDE BOOST! Z velocity: ${crouchBoost} (+3 speed)`);
     }
   }, [isCrouching, playerId, isGrounded]);
 
@@ -134,10 +134,10 @@ export const PoseCharacterController = ({
     // Set jumping flag to prevent movement logic from overriding
     jumpingFlag.current = true;
     
-    // Strong upward velocity with forward momentum
-    const forwardMomentum = Math.max(currentVel.z + 5, 15); // Add 5 to current speed or boost to 15
+    // Strong upward velocity with significant forward momentum
+    const forwardMomentum = Math.max(currentVel.z + 8, 20); // Add 8 to current speed or boost to 20 for obstacle clearance
     
-    console.log(`🚀 [${playerId}] POSE JUMPING! Setting Y velocity to 22, Z momentum: ${forwardMomentum}`);
+    console.log(`🚀 [${playerId}] POSE POWER JUMPING! Setting Y velocity to 22, Z momentum: ${forwardMomentum}`);
     rb.current.setLinvel({
       x: currentVel.x,
       y: 22, // Higher jump force for better obstacle clearance
@@ -426,12 +426,12 @@ export const PoseCharacterController = ({
         }
       }
       
-      // Apply minimal speed boost when crouching (momentum for obstacles)
-      const finalSpeed = currentSpeed.current * (crouch ? 1.05 : 1); // 5% speed boost when crouching (very minimal)
+      // Apply useful speed boost when crouching (momentum for obstacles)
+      const finalSpeed = currentSpeed.current * (crouch ? 1.4 : 1); // 40% speed boost when crouching for obstacle navigation
       
               // Debug car movement for pose
         if (isControlled && (forward || backward || Math.abs(currentSpeed.current) > 0.1)) {
-          const speedInfo = crouch ? " (CROUCH CRAWL +5%)" : "";
+          const speedInfo = crouch ? " (CROUCH SLIDE +40%)" : "";
           console.log(`🏎️ [${playerId}] POSE Car movement - Target: ${targetSpeed.toFixed(2)}, Current: ${currentSpeed.current.toFixed(2)}, Final: ${finalSpeed.toFixed(2)}${speedInfo}`);
         }
 
@@ -440,13 +440,13 @@ export const PoseCharacterController = ({
       
       // PERSISTENT CROUCH MOVEMENT - Auto scoot forward while crouching
       if (crouch && isGrounded) {
-        // Add automatic forward movement while crouching (very slow crawl)
-        const crouchSpeed = 0.3; // Very slow crawling speed
+        // Add automatic forward movement while crouching (useful crawling speed)
+        const crouchSpeed = 1.5; // Useful crawling speed for obstacle navigation
         currentSpeed.current = Math.max(currentSpeed.current, crouchSpeed);
         
         // Cap maximum speed when crouching to prevent it from being too fast
-        if (currentSpeed.current > 1.0) {
-          currentSpeed.current = 1.0; // Very low max crouch speed cap
+        if (currentSpeed.current > 4.0) {
+          currentSpeed.current = 4.0; // Reasonable max crouch speed cap
         }
       }
 
