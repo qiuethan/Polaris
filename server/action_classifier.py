@@ -28,9 +28,9 @@ def classify_action_simple(angle_history: List[Dict], prev_action: Optional[str]
     right_shoulder = current_frame.get('right_shoulder_angle')
     
     # === CROUCH DETECTION WITH BUFFER ===
-    # Both knees bent beyond 110 degrees BUT NOT in mountain climber position - HIGHEST PRIORITY
+    # Both knees bent beyond 120 degrees BUT NOT in mountain climber position - HIGHEST PRIORITY (more lenient)
     knees_bent = (left_knee is not None and right_knee is not None and 
-                  left_knee < 110 and right_knee < 110)
+                  left_knee < 120 and right_knee < 120)
     
     # Check if person is in mountain climber position (would exclude from crouch)
     in_mountain_climber_position = False
@@ -60,9 +60,9 @@ def classify_action_simple(angle_history: List[Dict], prev_action: Optional[str]
             frame_left_shoulder = frame.get('left_shoulder_angle')
             frame_right_shoulder = frame.get('right_shoulder_angle')
             
-            # Check for recent crouching
+                         # Check for recent crouching
             recent_crouch = (frame_left_knee is not None and frame_right_knee is not None and
-                           frame_left_knee < 120 and frame_right_knee < 120)
+                            frame_left_knee < 130 and frame_right_knee < 130)
             
             # Check for recent mountain climber position (arms extended + hunched)
             recent_mountain_climber = False
@@ -221,7 +221,7 @@ def classify_action_simple(angle_history: List[Dict], prev_action: Optional[str]
             avg_body_size = sum(body_sizes) / len(body_sizes)
             if avg_body_size > 0:
                 # Jump threshold relative to person's height (shoulder to hip distance)
-                jump_threshold = avg_body_size * 0.08  # 8% of person's torso height (lowered for easier detection)
+                jump_threshold = avg_body_size * 0.12  # 12% of person's torso height (balanced sensitivity)
                 is_moving_up = upward_movement > jump_threshold
             else:
                 is_moving_up = False  # Can't detect without body size reference
@@ -279,11 +279,11 @@ def classify_action_from_history(angle_history: List[Dict], prev_action: Optiona
 
 # Example usage and testing
 if __name__ == "__main__":
-    # Example 1: Crouch data
+    # Example 1: Crouch data (more lenient)
     crouch_frames = [
         {
-            "left_knee_angle": 100.0,  # Bent knee (< 110°)
-            "right_knee_angle": 95.0,  # Bent knee (< 110°)
+            "left_knee_angle": 115.0,  # Bent knee (< 120°) - more lenient
+            "right_knee_angle": 110.0,  # Bent knee (< 120°) - more lenient
             "left_hip_angle": 120.0,
             "right_hip_angle": 125.0,
         }
@@ -378,4 +378,4 @@ if __name__ == "__main__":
     print(f"Priority 1 - Crouch detection: {crouch_action}")    # Should print "crouch"
     print(f"Priority 2 - Mountain climber (HIP MOVEMENT): {climber_action}")  # Should print "mountain_climber"
     print(f"Priority 3 - Running detection: {run_action}")     # Should print "run"
-    print(f"Priority 4 - Jump detection (UPWARD >8% person height + cooldown): {jump_action}")  # Should print "jump" 
+    print(f"Priority 4 - Jump detection (UPWARD >12% person height + cooldown): {jump_action}")  # Should print "jump" 
