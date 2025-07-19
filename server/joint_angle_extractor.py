@@ -10,12 +10,20 @@ class JointAngleFeatureExtractor:
     def __init__(self, min_visibility=0.3):
         # MediaPipe pose landmark indices
         self.landmark_indices = {
+            # Head/Face landmarks
+            'nose': 0,
+            'left_eye': 2,
+            'right_eye': 5,
+            'left_ear': 7,
+            'right_ear': 8,
+            # Upper body landmarks
             'left_shoulder': 11,
             'right_shoulder': 12,
             'left_elbow': 13,
             'right_elbow': 14,
             'left_wrist': 15,
             'right_wrist': 16,
+            # Lower body landmarks
             'left_hip': 23,
             'right_hip': 24,
             'left_knee': 25,
@@ -205,12 +213,133 @@ class JointAngleFeatureExtractor:
         
         return self.calculate_angle(knee, ankle, foot)
     
+    def head_tilt_angle(self, landmarks):
+        """Calculate head tilt angle (left_shoulder → nose → right_shoulder) - side to side head tilt"""
+        if not landmarks:
+            return None
+        
+        left_shoulder = self.get_landmark_coords(landmarks, 'left_shoulder')
+        nose = self.get_landmark_coords(landmarks, 'nose')
+        right_shoulder = self.get_landmark_coords(landmarks, 'right_shoulder')
+        
+        return self.calculate_angle(left_shoulder, nose, right_shoulder)
+    
+    def head_turn_angle(self, landmarks):
+        """Calculate head turn angle relative to shoulder orientation (body reference frame)
+        Uses nose position relative to the "forward" direction of the shoulders
+        Returns: 
+        - Positive values = RIGHT turn (user turns head to their right relative to shoulders)
+        - Negative values = LEFT turn (user turns head to their left relative to shoulders)  
+        - 0 = Looking straight ahead relative to shoulders"""
+        if not landmarks:
+            return None
+        
+        # Get required landmarks
+        left_shoulder = self.get_landmark_coords(landmarks, 'left_shoulder')
+        right_shoulder = self.get_landmark_coords(landmarks, 'right_shoulder')
+        nose = self.get_landmark_coords(landmarks, 'nose')
+        
+        if left_shoulder is None or right_shoulder is None or nose is None:
+            return None
+        
+        # 1. Calculate shoulder center (body center point)
+        shoulder_center = (left_shoulder + right_shoulder) / 2
+        
+        # 2. Calculate shoulder line vector (left to right shoulder)
+        shoulder_vector = right_shoulder - left_shoulder
+        shoulder_length = np.linalg.norm(shoulder_vector)
+        
+        if shoulder_length == 0:
+            return 0.0  # Shoulders at same position, can't determine orientation
+        
+        # 3. Calculate the "forward" direction perpendicular to shoulders
+        # Rotate the shoulder vector 90 degrees counterclockwise to get forward direction
+        # If shoulder vector is [x, y], then perpendicular is [-y, x]
+        forward_vector = np.array([-shoulder_vector[1], shoulder_vector[0]])
+        forward_length = np.linalg.norm(forward_vector)
+        
+        if forward_length == 0:
+            return 0.0
+        
+        # 4. Normalize the forward vector
+        forward_unit = forward_vector / forward_length
+        
+        # 5. Calculate where nose "should be" if looking straight ahead
+        # Project some distance forward from shoulder center
+        expected_nose_distance = 0.1  # Arbitrary forward distance
+        expected_nose_position = shoulder_center + (forward_unit * expected_nose_distance)
+        
+        # 6. Calculate actual nose offset from shoulder center
+        actual_nose_vector = nose - shoulder_center
+        
+        # 7. Project nose position onto shoulder line to get left-right deviation
+        shoulder_unit = shoulder_vector / shoulder_length
+        lateral_deviation = np.dot(actual_nose_vector, shoulder_unit)
+        
+        # 8. Normalize the deviation relative to shoulder width
+        normalized_deviation = lateral_deviation / (shoulder_length / 2)
+        
+        # 9. Convert to degrees
+        max_turn_angle = 45.0  # Maximum detectable turn
+        turn_angle = abs(normalized_deviation) * max_turn_angle
+        
+        # 10. Determine direction based on shoulder coordinate system
+        # Positive lateral_deviation = moved toward right shoulder = RIGHT turn
+        # Negative lateral_deviation = moved toward left shoulder = LEFT turn
+        if lateral_deviation > 0:
+            return -turn_angle   # RIGHT turn (negative)
+        else:
+            return turn_angle  # LEFT turn (positive)
+    
+    def neck_angle(self, landmarks):
+        """Calculate neck angle (shoulder_center → nose vertical projection) - forward/backward neck lean"""
+        if not landmarks:
+            return None
+        
+        left_shoulder = self.get_landmark_coords(landmarks, 'left_shoulder')
+        right_shoulder = self.get_landmark_coords(landmarks, 'right_shoulder')
+        nose = self.get_landmark_coords(landmarks, 'nose')
+        
+        # Calculate center point between shoulders
+        if left_shoulder is None or right_shoulder is None or nose is None:
+            return None
+            
+        shoulder_center = (left_shoulder + right_shoulder) / 2
+        
+        # Create a vertical reference point below the shoulder center
+        vertical_ref = np.array([shoulder_center[0], shoulder_center[1] + 0.1])  # Point directly below
+        
+        return self.calculate_angle(vertical_ref, shoulder_center, nose)
+    
+    def left_shoulder_roll_angle(self, landmarks):
+        """Calculate left shoulder roll angle (nose → left_shoulder → left_elbow) - shoulder elevation"""
+        if not landmarks:
+            return None
+        
+        nose = self.get_landmark_coords(landmarks, 'nose')
+        left_shoulder = self.get_landmark_coords(landmarks, 'left_shoulder')
+        left_elbow = self.get_landmark_coords(landmarks, 'left_elbow')
+        
+        return self.calculate_angle(nose, left_shoulder, left_elbow)
+    
+    def right_shoulder_roll_angle(self, landmarks):
+        """Calculate right shoulder roll angle (nose → right_shoulder → right_elbow) - shoulder elevation"""
+        if not landmarks:
+            return None
+        
+        nose = self.get_landmark_coords(landmarks, 'nose')
+        right_shoulder = self.get_landmark_coords(landmarks, 'right_shoulder')
+        right_elbow = self.get_landmark_coords(landmarks, 'right_elbow')
+        
+        return self.calculate_angle(nose, right_shoulder, right_elbow)
+    
     def compute_all_angles(self, landmarks):
         """
         Compute all joint angles and return as a dictionary
         Only includes angles where all required joints were detected
         """
         all_angles = {
+            # Existing joint angles
             "left_knee_angle": self.left_knee_angle(landmarks),
             "right_knee_angle": self.right_knee_angle(landmarks),
             "left_hip_angle": self.left_hip_angle(landmarks),
@@ -220,7 +349,13 @@ class JointAngleFeatureExtractor:
             "left_elbow_angle": self.left_elbow_angle(landmarks),
             "right_elbow_angle": self.right_elbow_angle(landmarks),
             "left_shoulder_angle": self.left_shoulder_angle(landmarks),
-            "right_shoulder_angle": self.right_shoulder_angle(landmarks)
+            "right_shoulder_angle": self.right_shoulder_angle(landmarks),
+            # NEW: Head and neck tracking angles
+            "head_tilt_angle": self.head_tilt_angle(landmarks),
+            "head_turn_angle": self.head_turn_angle(landmarks),
+            "neck_angle": self.neck_angle(landmarks),
+            "left_shoulder_roll_angle": self.left_shoulder_roll_angle(landmarks),
+            "right_shoulder_roll_angle": self.right_shoulder_roll_angle(landmarks)
         }
         
         # Only return angles that were successfully calculated (not None)

@@ -110,6 +110,7 @@ class DualPoseTracker:
                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
         y_position += 25
         
+        # === BODY JOINT ANGLES ===
         for joint_type in joint_types:
             # Left limb angle
             left_key = f"left_{joint_type}_angle"
@@ -143,8 +144,84 @@ class DualPoseTracker:
             
             y_position += 20
         
+        # === HEAD & NECK ANGLES ===
+        y_position += 10  # Add some spacing
+        head_color = (0, 255, 255)  # Yellow for head/neck angles
+        
+        # Head & Neck Section Header
+        cv2.putText(frame, "HEAD & NECK:", (x_offset, y_position), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, head_color, 1)
+        y_position += 20
+        
+        # Head Tilt (side to side)
+        if 'head_tilt_angle' in angles and angles['head_tilt_angle'] is not None:
+            tilt_text = f"Head Tilt: {angles['head_tilt_angle']:.1f}°"
+            tilt_color = head_color
+            total_detected += 1
+        else:
+            tilt_text = "Head Tilt: N/A"
+            tilt_color = missing_color
+        cv2.putText(frame, tilt_text, (x_offset, y_position), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, tilt_color, 1)
+        y_position += 15
+        
+        # Head Turn (left to right with direction)
+        if 'head_turn_angle' in angles and angles['head_turn_angle'] is not None:
+            turn_value = angles['head_turn_angle']
+            if turn_value > 0:
+                direction = "RIGHT"
+                turn_text = f"Head Turn: {turn_value:.1f}° {direction}"
+            elif turn_value < 0:
+                direction = "LEFT"
+                turn_text = f"Head Turn: {abs(turn_value):.1f}° {direction}"
+            else:
+                turn_text = f"Head Turn: 0.0° CENTER"
+            turn_color = head_color
+            total_detected += 1
+        else:
+            turn_text = "Head Turn: N/A"
+            turn_color = missing_color
+        cv2.putText(frame, turn_text, (x_offset, y_position), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, turn_color, 1)
+        y_position += 15
+        
+        # Neck Angle (forward/back lean)
+        if 'neck_angle' in angles and angles['neck_angle'] is not None:
+            neck_text = f"Neck Lean: {angles['neck_angle']:.1f}°"
+            neck_color = head_color
+            total_detected += 1
+        else:
+            neck_text = "Neck Lean: N/A"
+            neck_color = missing_color
+        cv2.putText(frame, neck_text, (x_offset, y_position), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, neck_color, 1)
+        y_position += 15
+        
+        # Shoulder Roll angles
+        if 'left_shoulder_roll_angle' in angles and angles['left_shoulder_roll_angle'] is not None:
+            left_roll_text = f"L-Shoulder Roll: {angles['left_shoulder_roll_angle']:.1f}°"
+            left_roll_color = left_limb_color
+            total_detected += 1
+        else:
+            left_roll_text = "L-Shoulder Roll: N/A"
+            left_roll_color = missing_color
+        cv2.putText(frame, left_roll_text, (x_offset, y_position), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, left_roll_color, 1)
+        y_position += 15
+        
+        if 'right_shoulder_roll_angle' in angles and angles['right_shoulder_roll_angle'] is not None:
+            right_roll_text = f"R-Shoulder Roll: {angles['right_shoulder_roll_angle']:.1f}°"
+            right_roll_color = right_limb_color
+            total_detected += 1
+        else:
+            right_roll_text = "R-Shoulder Roll: N/A"
+            right_roll_color = missing_color
+        cv2.putText(frame, right_roll_text, (x_offset, y_position), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, right_roll_color, 1)
+        y_position += 20
+        
         # Show detection status
-        status_text = f"Detected: {total_detected}/10 limb angles"
+        status_text = f"Detected: {total_detected}/15 angles (10 limb + 5 head/neck)"
         status_color = left_limb_color if total_detected > 0 else missing_color
         cv2.putText(frame, status_text, (x_offset, y_position + 10), 
                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, status_color, 1)
@@ -155,6 +232,8 @@ class DualPoseTracker:
                    cv2.FONT_HERSHEY_SIMPLEX, 0.35, left_limb_color, 1)
         cv2.putText(frame, "R = Right Limb", (x_offset + 100, legend_y), 
                    cv2.FONT_HERSHEY_SIMPLEX, 0.35, right_limb_color, 1)
+        cv2.putText(frame, "Head/Neck = Yellow", (x_offset, legend_y + 15), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.35, (0, 255, 255), 1)
     
 
     
@@ -389,7 +468,8 @@ class DualPoseTracker:
         
         print("✨ SIMPLIFIED Dual Pose Tracker started. Press ESC to exit.")
         print("🔵 Blue = Left limbs | 🟠 Orange = Right limbs | Gray = Missing joints")
-        print("📊 Tracking: Left/Right Knee, Hip, Ankle, Elbow, Shoulder angles")
+        print("📊 Tracking: Left/Right Knee, Hip, Ankle, Elbow, Shoulder + HEAD & NECK angles")
+        print("🧠 HEAD TRACKING: Tilt, Turn (LEFT/RIGHT direction), Neck lean, Shoulder roll")
         print("🎯 ACTION DETECTION (Priority Order):")
         print("   🧗 MOUNTAIN CLIMBER: Arms > 165° + Shoulders < 115° + Hip movement > 12°")
         print("   🦵 CROUCH: Both knees bent < 110°")
