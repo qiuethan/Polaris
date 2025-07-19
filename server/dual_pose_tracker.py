@@ -40,6 +40,10 @@ class DualPoseTracker:
         self.left_action = "unknown"
         self.right_action = "unknown"
         
+        # Track previous actions to detect new instances
+        self.prev_left_action = "unknown"
+        self.prev_right_action = "unknown"
+        
         # Simple immediate action detection - no smoothing needed
     
     def draw_angle_info(self, frame, angles, side="left"):
@@ -227,6 +231,25 @@ class DualPoseTracker:
         else:
             self.right_action = "unknown"
         
+        # === LOG NEW ACTION INSTANCES ===
+        # Left side - detect transitions from unknown to action
+        if self.prev_left_action == "unknown" and self.left_action != "unknown":
+            if self.left_action == "crouch":
+                print("🦵 LEFT SIDE: 1 crouch detected!")
+            elif self.left_action == "mountain_climber":
+                print("🧗 LEFT SIDE: 1 mountain climber kick detected!")
+        
+        # Right side - detect transitions from unknown to action  
+        if self.prev_right_action == "unknown" and self.right_action != "unknown":
+            if self.right_action == "crouch":
+                print("🦵 RIGHT SIDE: 1 crouch detected!")
+            elif self.right_action == "mountain_climber":
+                print("🧗 RIGHT SIDE: 1 mountain climber kick detected!")
+        
+        # Update previous actions for next frame
+        self.prev_left_action = self.left_action
+        self.prev_right_action = self.right_action
+        
         # Add a vertical line to separate the two halves
         cv2.line(left_half, (left_half.shape[1]-1, 0), (left_half.shape[1]-1, height), (0, 255, 0), 2)
         cv2.line(right_half, (0, 0), (0, height), (0, 255, 0), 2)
@@ -270,6 +293,7 @@ class DualPoseTracker:
         print("   🦵 CROUCH: Both knees bent < 110°")
         print("   🧗 MOUNTAIN CLIMBER: Arms > 150° + Shoulders < 130° + Hip movement > 7°")
         print("⚡ Instant response with SENSITIVE detection!")
+        print("📝 Console logging: Each new action instance will be logged!")
         
         try:
             consecutive_failures = 0
