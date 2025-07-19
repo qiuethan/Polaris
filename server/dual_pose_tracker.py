@@ -35,8 +35,8 @@ class DualPoseTracker:
         self.angle_extractor_right = JointAngleFeatureExtractor()
         
         # Action classification setup - separate for each side
-        self.left_angle_history = deque(maxlen=1)   # Store current frame only for immediate detection
-        self.right_angle_history = deque(maxlen=1)  # Store current frame only for immediate detection
+        self.left_angle_history = deque(maxlen=5)   # Store last 5 frames for movement detection
+        self.right_angle_history = deque(maxlen=5)  # Store last 5 frames for movement detection
         self.left_action = "unknown"
         self.right_action = "unknown"
         
@@ -266,8 +266,10 @@ class DualPoseTracker:
         print("✨ SIMPLIFIED Dual Pose Tracker started. Press ESC to exit.")
         print("🔵 Blue = Left limbs | 🟠 Orange = Right limbs | Gray = Missing joints")
         print("📊 Tracking: Left/Right Knee, Hip, Ankle, Elbow, Shoulder angles")
-        print("🎯 CROUCH DETECTION: Both knees bent < 110°")
-        print("⚡ Instant response - no delays or smoothing!")
+        print("🎯 ACTION DETECTION:")
+        print("   🦵 CROUCH: Both knees bent < 110°")
+        print("   🧗 MOUNTAIN CLIMBER: Arms > 150° + Shoulders < 130° + Hip movement > 7°")
+        print("⚡ Instant response with SENSITIVE detection!")
         
         try:
             consecutive_failures = 0
