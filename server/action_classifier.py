@@ -1,11 +1,12 @@
-from typing import List, Dict
+from typing import List, Dict, Optional
 
-def classify_action_simple(angle_history: List[Dict]) -> str:
+def classify_action_simple(angle_history: List[Dict], prev_action: Optional[str] = None) -> str:
     """
     Simple, direct action classification based on current pose.
     
     Args:
         angle_history: List of dictionaries containing joint angles over time
+        prev_action: Previous detected action for cooldown logic
         
     Returns:
         String action label: "crouch", "mountain_climber", "run", "jump", or "unknown"
@@ -62,58 +63,11 @@ def classify_action_simple(angle_history: List[Dict]) -> str:
     if straight_arms and hunched_back and (hip_movement or len(angle_history) < 3):
         return "mountain_climber"
     
-    # === JUMP DETECTION ===
-    # Track vertical position changes while maintaining consistent size
-    jump_detected = False
-    if len(angle_history) >= 4:  # Need more frames to track movement
-        # Get hip positions from previous frames
-        prev_frames = angle_history[-4:]  # Look at last 4 frames
-        hip_y_positions = []
-        body_sizes = []
-        
-        for frame in prev_frames:
-            left_hip_y = frame.get('left_hip_y')
-            right_hip_y = frame.get('right_hip_y')
-            left_shoulder_y = frame.get('left_shoulder_y')
-            right_shoulder_y = frame.get('right_shoulder_y')
-            
-            # Only process if all positions are available and not None
-            if (left_hip_y is not None and right_hip_y is not None and 
-                left_shoulder_y is not None and right_shoulder_y is not None):
-                # Average hip position (center of mass)
-                avg_hip_y = (left_hip_y + right_hip_y) / 2
-                hip_y_positions.append(avg_hip_y)
-                
-                # Body size indicator (shoulder to hip distance)
-                avg_shoulder_y = (left_shoulder_y + right_shoulder_y) / 2
-                body_size = abs(avg_hip_y - avg_shoulder_y)
-                body_sizes.append(body_size)
-        
-        # Check for jump pattern: significant vertical movement + consistent size
-        if len(hip_y_positions) >= 3 and len(body_sizes) >= 3:
-            # 1. Significant vertical movement (position change)
-            max_hip_y = max(hip_y_positions)
-            min_hip_y = min(hip_y_positions)
-            vertical_movement = abs(max_hip_y - min_hip_y)
-            
-            # 2. Consistent body size (person doesn't get bigger/smaller)
-            avg_body_size = sum(body_sizes) / len(body_sizes)
-            max_body_size = max(body_sizes)
-            min_body_size = min(body_sizes)
-            
-            # Avoid division by zero
-            if avg_body_size > 0:
-                size_variation = abs(max_body_size - min_body_size) / avg_body_size
-                
-                # Jump criteria: big vertical movement + stable size
-                significant_movement = vertical_movement > 0.05  # 5% of frame height
-                stable_size = size_variation < 0.15  # Size varies less than 15%
-                
-                if significant_movement and stable_size:
-                    jump_detected = True
-    
-    if jump_detected:
-        return "jump"
+    # === CROUCH DETECTION ===
+    # Simple rule: Both knees bent beyond 110 degrees - PRIORITY OVER JUMP
+    if (left_knee is not None and right_knee is not None and 
+        left_knee < 110 and right_knee < 110):
+        return "crouch"
     
     # === RUNNING DETECTION ===
     # 1. Alternating knee pattern (moderate threshold to catch natural running)
@@ -163,27 +117,105 @@ def classify_action_simple(angle_history: List[Dict]) -> str:
     if alternating_knees and arm_movement and proper_running_position:
         return "run"
     
-    # === CROUCH DETECTION ===
-    # Simple rule: Both knees bent beyond 110 degrees
-    if (left_knee is not None and right_knee is not None and 
-        left_knee < 110 and right_knee < 110):
-        return "crouch"
+    # === JUMP DETECTION ===
+    # Track UPWARD vertical movement while maintaining consistent size - LOWEST PRIORITY
+    # COOLDOWN: No jump detection after crouch or mountain climber
+    jump_detected = False
+    
+    # Add cooldown period after crouch or mountain climber
+    cooldown_active = prev_action in ["crouch", "mountain_climber"]
+    
+    if not cooldown_active and len(angle_history) >= 4:  # Need more frames to track movement
+        # Get hip positions from previous frames
+        prev_frames = angle_history[-4:]  # Look at last 4 frames
+        hip_y_positions = []
+        body_sizes = []
+        
+        for frame in prev_frames:
+            left_hip_y = frame.get('left_hip_y')
+            right_hip_y = frame.get('right_hip_y')
+            left_shoulder_y = frame.get('left_shoulder_y')
+            right_shoulder_y = frame.get('right_shoulder_y')
+            
+            # Only process if all positions are available and not None
+            if (left_hip_y is not None and right_hip_y is not None and 
+                left_shoulder_y is not None and right_shoulder_y is not None):
+                # Average hip position (center of mass)
+                avg_hip_y = (left_hip_y + right_hip_y) / 2
+                hip_y_positions.append(avg_hip_y)
+                
+                # Body size indicator (shoulder to hip distance)
+                avg_shoulder_y = (left_shoulder_y + right_shoulder_y) / 2
+                body_size = abs(avg_hip_y - avg_shoulder_y)
+                body_sizes.append(body_size)
+        
+        # Check for jump pattern: UPWARD movement + consistent size + proper pose
+        if len(hip_y_positions) >= 3 and len(body_sizes) >= 3:
+            # 1. UPWARD vertical movement only (decreasing Y values = moving up)
+            earliest_hip_y = hip_y_positions[0]  # First frame
+            latest_hip_y = hip_y_positions[-1]   # Last frame
+            
+            # Check if person moved UP (Y coordinates decrease when going up)
+            upward_movement = earliest_hip_y - latest_hip_y  # Positive = moved up
+            
+            # Use person's body size as reference (more consistent than frame height)
+            avg_body_size = sum(body_sizes) / len(body_sizes)
+            if avg_body_size > 0:
+                # Jump threshold relative to person's height (shoulder to hip distance)
+                jump_threshold = avg_body_size * 0.15  # 15% of person's torso height
+                is_moving_up = upward_movement > jump_threshold
+            else:
+                is_moving_up = False  # Can't detect without body size reference
+            
+            # 2. Consistent body size (person doesn't get bigger/smaller)
+            # Note: avg_body_size already calculated above for jump threshold
+            max_body_size = max(body_sizes)
+            min_body_size = min(body_sizes)
+            
+            # 3. Proper jumping pose (not crouching during movement)
+            proper_jump_pose = True
+            if (left_knee is not None and right_knee is not None):
+                # Exclude if person is in deep crouch during the movement
+                if left_knee < 110 and right_knee < 110:  # Both knees bent (crouching)
+                    proper_jump_pose = False
+                
+                # Exclude if person is in mountain climber pose
+                if (left_shoulder is not None and right_shoulder is not None and
+                    left_elbow is not None and right_elbow is not None):
+                    hunched_forward = (left_shoulder < 115 and right_shoulder < 115)
+                    arms_extended = (left_elbow > 165 and right_elbow > 165)
+                    if hunched_forward and arms_extended:  # Mountain climber pose
+                        proper_jump_pose = False
+            
+            # Avoid division by zero (avg_body_size already checked above)
+            if avg_body_size > 0:
+                size_variation = abs(max_body_size - min_body_size) / avg_body_size
+                
+                # Jump criteria: UPWARD movement (relative to person height) + stable size + proper pose + no cooldown
+                stable_size = size_variation < 0.15  # Size varies less than 15%
+                
+                if is_moving_up and stable_size and proper_jump_pose:
+                    jump_detected = True
+    
+    if jump_detected:
+        return "jump"
     
     # === DEFAULT TO UNKNOWN ===
     return "unknown"
 
 
-def classify_action_from_history(angle_history: List[Dict]) -> str:
+def classify_action_from_history(angle_history: List[Dict], prev_action: Optional[str] = None) -> str:
     """
     Simple action classification based on current pose.
     
     Args:
         angle_history: List of dictionaries containing joint angles over time
+        prev_action: Previous detected action for cooldown logic
         
     Returns:
         String action label
     """
-    return classify_action_simple(angle_history)
+    return classify_action_simple(angle_history, prev_action)
 
 
 # Example usage and testing
@@ -234,41 +266,49 @@ if __name__ == "__main__":
         }
     ]
     
-    # Example 4: Jump data - vertical position change with consistent body size
+    # Example 4: Jump data - vertical position change + proper jumping pose (not crouching)
     jump_frames = [
         {
             "left_hip_y": 0.6,             # Hip position at bottom
             "right_hip_y": 0.6,            # Hip position at bottom
             "left_shoulder_y": 0.4,        # Shoulder position
             "right_shoulder_y": 0.4,       # Shoulder position (0.2 body size)
+            "left_knee_angle": 160.0,      # Knees not bent (proper jumping stance)
+            "right_knee_angle": 165.0,     # Knees not bent (proper jumping stance)
         },
         {
             "left_hip_y": 0.5,             # Hip moved up
             "right_hip_y": 0.5,            # Hip moved up
             "left_shoulder_y": 0.3,        # Shoulder moved up
             "right_shoulder_y": 0.3,       # Shoulder moved up (0.2 body size - consistent)
+            "left_knee_angle": 155.0,      # Still not crouching
+            "right_knee_angle": 160.0,     # Still not crouching
         },
         {
             "left_hip_y": 0.45,            # Hip at peak (0.15 total movement > 5%)
             "right_hip_y": 0.45,           # Hip at peak
             "left_shoulder_y": 0.25,       # Shoulder at peak
             "right_shoulder_y": 0.25,      # Shoulder at peak (0.2 body size - consistent)
+            "left_knee_angle": 170.0,      # Extended in air
+            "right_knee_angle": 175.0,     # Extended in air
         },
         {
             "left_hip_y": 0.55,            # Hip coming down
             "right_hip_y": 0.55,           # Hip coming down
             "left_shoulder_y": 0.35,       # Shoulder coming down
             "right_shoulder_y": 0.35,      # Shoulder coming down (0.2 body size - consistent)
+            "left_knee_angle": 165.0,      # Landing with knees not deeply bent
+            "right_knee_angle": 160.0,     # Landing with knees not deeply bent
         }
     ]
     
-    # Test the classifier
-    crouch_action = classify_action_from_history(crouch_frames)
+    # Test the classifier (in priority order)
     climber_action = classify_action_from_history(mountain_climber_frames)
+    crouch_action = classify_action_from_history(crouch_frames)
     run_action = classify_action_from_history(running_frames)
     jump_action = classify_action_from_history(jump_frames)
     
-    print(f"Test crouch detection: {crouch_action}")        # Should print "crouch"
-    print(f"Test mountain climber detection: {climber_action}")  # Should print "mountain_climber"
-    print(f"Test running detection: {run_action}")         # Should print "run"
-    print(f"Test jump detection: {jump_action}")           # Should print "jump" 
+    print(f"Priority 1 - Mountain climber: {climber_action}")  # Should print "mountain_climber"
+    print(f"Priority 2 - Crouch detection: {crouch_action}")    # Should print "crouch"
+    print(f"Priority 3 - Running detection: {run_action}")     # Should print "run"
+    print(f"Priority 4 - Jump detection (UPWARD >15% person height + cooldown): {jump_action}")  # Should print "jump" 

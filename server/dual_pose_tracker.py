@@ -265,14 +265,14 @@ class DualPoseTracker:
         
         if len(self.left_angle_history) >= 1:
             try:
-                raw_left_action = classify_action_from_history(list(self.left_angle_history))
+                raw_left_action = classify_action_from_history(list(self.left_angle_history), self.prev_left_action)
             except Exception as e:
                 print(f"Left side classification error: {e}")
                 raw_left_action = "unknown"
         
         if len(self.right_angle_history) >= 1:
             try:
-                raw_right_action = classify_action_from_history(list(self.right_angle_history))
+                raw_right_action = classify_action_from_history(list(self.right_angle_history), self.prev_right_action)
             except Exception as e:
                 print(f"Right side classification error: {e}")
                 raw_right_action = "unknown"
@@ -390,11 +390,11 @@ class DualPoseTracker:
         print("✨ SIMPLIFIED Dual Pose Tracker started. Press ESC to exit.")
         print("🔵 Blue = Left limbs | 🟠 Orange = Right limbs | Gray = Missing joints")
         print("📊 Tracking: Left/Right Knee, Hip, Ankle, Elbow, Shoulder angles")
-        print("🎯 ACTION DETECTION:")
-        print("   🦵 CROUCH: Both knees bent < 110°")
+        print("🎯 ACTION DETECTION (Priority Order):")
         print("   🧗 MOUNTAIN CLIMBER: Arms > 165° + Shoulders < 115° + Hip movement > 12°")
+        print("   🦵 CROUCH: Both knees bent < 110°")
         print("   🏃 RUN: Alternating knees (25° diff) + Arm movement > 15° + Running stance")
-        print("   🦘 JUMP: Vertical position change >5% + Consistent body size <15% variation")
+        print("   🦘 JUMP: UPWARD movement >15% person height + Cooldown after crouch/climber")
         print("⚡ Instant response with SENSITIVE detection!")
         print("📝 REP COUNTING: Each action automatically counted and logged!")
         print("🔄 Action buffering: Crouch 0.25s | Mountain climber 0.07s | Run INSTANT | Jump 0.1s")
