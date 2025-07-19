@@ -27,47 +27,106 @@ def classify_action_simple(angle_history: List[Dict], prev_action: Optional[str]
     left_shoulder = current_frame.get('left_shoulder_angle')
     right_shoulder = current_frame.get('right_shoulder_angle')
     
-    # === MOUNTAIN CLIMBER DETECTION ===
-    # 1. Straight arms (elbows close to 180°) - stricter requirement
+    # === CROUCH DETECTION WITH BUFFER ===
+    # Both knees bent beyond 110 degrees BUT NOT in mountain climber position - HIGHEST PRIORITY
+    knees_bent = (left_knee is not None and right_knee is not None and 
+                  left_knee < 110 and right_knee < 110)
+    
+    # Check if person is in mountain climber position (would exclude from crouch)
+    in_mountain_climber_position = False
+    if (left_elbow is not None and right_elbow is not None and
+        left_shoulder is not None and right_shoulder is not None):
+        # Mountain climber indicators: straight arms + hunched forward (plank position)
+        arms_straight = (left_elbow > 150 and right_elbow > 150)
+        hunched_forward = (left_shoulder < 120 and right_shoulder < 120)
+        in_mountain_climber_position = arms_straight and hunched_forward
+    
+    # Only classify as crouch if knees are bent AND not in mountain climber position
+    is_crouching = knees_bent and not in_mountain_climber_position
+    
+    if is_crouching:
+        return "crouch"
+    
+    # Add buffer after crouch or mountain climber to prevent immediate run/jump detection
+    action_buffer_active = False
+    if prev_action in ["crouch", "mountain_climber"] and len(angle_history) >= 2:
+        # Check if we just exited crouch or mountain climber position in recent frames
+        for i in range(min(3, len(angle_history))):  # Look back 3 frames
+            frame = angle_history[-(i+1)]
+            frame_left_knee = frame.get('left_knee_angle')
+            frame_right_knee = frame.get('right_knee_angle')
+            frame_left_elbow = frame.get('left_elbow_angle')
+            frame_right_elbow = frame.get('right_elbow_angle')
+            frame_left_shoulder = frame.get('left_shoulder_angle')
+            frame_right_shoulder = frame.get('right_shoulder_angle')
+            
+            # Check for recent crouching
+            recent_crouch = (frame_left_knee is not None and frame_right_knee is not None and
+                           frame_left_knee < 120 and frame_right_knee < 120)
+            
+            # Check for recent mountain climber position (arms extended + hunched)
+            recent_mountain_climber = False
+            if (frame_left_elbow is not None and frame_right_elbow is not None and
+                frame_left_shoulder is not None and frame_right_shoulder is not None):
+                arms_extended = (frame_left_elbow > 150 and frame_right_elbow > 150)
+                hunched_position = (frame_left_shoulder < 125 and frame_right_shoulder < 125)
+                recent_mountain_climber = arms_extended and hunched_position
+            
+            # If any recent frame was crouching or mountain climbing, maintain buffer
+            if recent_crouch or recent_mountain_climber:
+                action_buffer_active = True
+                break
+    
+    # === MOUNTAIN CLIMBER DETECTION (MODERATE SENSITIVITY - AFTER CROUCH) ===
+    # 1. Straight arms (elbows close to 180°) - STRICTER
     straight_arms = False
     if (left_elbow is not None and right_elbow is not None):
-        straight_arms = (left_elbow > 165 and right_elbow > 165)  # More strict (was 150°)
+        straight_arms = (left_elbow > 160 and right_elbow > 160)  # More strict (was 155°)
     
-    # 2. Hunched back/forward lean (shoulders pulled forward, hips bent) - stricter requirement
+    # 2. Hunched back/forward lean (shoulders pulled forward, hips bent) - STRICTER
     hunched_back = False
     if (left_shoulder is not None and right_shoulder is not None):
         # Lower shoulder angles indicate forward lean/hunched position
-        hunched_back = (left_shoulder < 110 and right_shoulder < 110)  # More strict (was 130°)
+        hunched_back = (left_shoulder < 115 and right_shoulder < 115)  # More strict (was 125°)
     
-    # 3. Hip movement over recent frames
-    hip_movement = False
+    # 3. Alternating hip movement (key indicator for mountain climbers)
+    alternating_hips = False
     if len(angle_history) >= 3 and left_hip is not None and right_hip is not None:
-        # Look at hip angle changes over last few frames
+        # Look at hip angle changes over recent frames to detect alternating pattern
         recent_left_hips = [frame.get('left_hip_angle') for frame in angle_history[-3:] 
                            if frame.get('left_hip_angle') is not None]
         recent_right_hips = [frame.get('right_hip_angle') for frame in angle_history[-3:] 
                             if frame.get('right_hip_angle') is not None]
         
-        if len(recent_left_hips) >= 2 and len(recent_right_hips) >= 2:
-            # Filter out None values and ensure we have numbers
+        if len(recent_left_hips) >= 3 and len(recent_right_hips) >= 3:
+            # Filter out None values
             valid_left_hips = [h for h in recent_left_hips if h is not None]
             valid_right_hips = [h for h in recent_right_hips if h is not None]
             
-            if len(valid_left_hips) >= 2 and len(valid_right_hips) >= 2:
-                left_hip_change = abs(max(valid_left_hips) - min(valid_left_hips))
-                right_hip_change = abs(max(valid_right_hips) - min(valid_right_hips))
-                # Significant hip movement detected - stricter requirement
-                hip_movement = (left_hip_change > 12 or right_hip_change > 12)  # More strict (was 7°)
+            if len(valid_left_hips) >= 3 and len(valid_right_hips) >= 3:
+                # Check for alternating pattern: one hip more bent (knee to chest), other more open
+                
+                # Current hip difference (mountain climber position)
+                current_hip_diff = abs(left_hip - right_hip)
+                alternating_position = current_hip_diff > 15  # One hip more bent, other more open
+                
+                # Check for movement/switching over frames
+                left_hip_range = abs(max(valid_left_hips) - min(valid_left_hips))
+                right_hip_range = abs(max(valid_right_hips) - min(valid_right_hips))
+                significant_movement = (left_hip_range > 12 or right_hip_range > 12)
+                
+                # Check for alternating pattern - hips should move in opposite directions
+                left_hip_trend = valid_left_hips[-1] - valid_left_hips[0]  # Getting more/less bent
+                right_hip_trend = valid_right_hips[-1] - valid_right_hips[0]  # Getting more/less bent
+                
+                # Alternating: if one hip is bending more, the other should be opening more
+                opposite_movement = (left_hip_trend * right_hip_trend < 0) and (abs(left_hip_trend) > 8 or abs(right_hip_trend) > 8)
+                
+                alternating_hips = alternating_position and (significant_movement or opposite_movement)
     
-    # Mountain climber: All three conditions
-    if straight_arms and hunched_back and (hip_movement or len(angle_history) < 3):
+    # Mountain climber: Require ALL three conditions - arms straight, hunched forward, alternating hips
+    if straight_arms and hunched_back and (alternating_hips or len(angle_history) < 3):
         return "mountain_climber"
-    
-    # === CROUCH DETECTION ===
-    # Simple rule: Both knees bent beyond 110 degrees - PRIORITY OVER JUMP
-    if (left_knee is not None and right_knee is not None and 
-        left_knee < 110 and right_knee < 110):
-        return "crouch"
     
     # === RUNNING DETECTION ===
     # 1. Alternating knee pattern (moderate threshold to catch natural running)
@@ -113,8 +172,8 @@ def classify_action_simple(angle_history: List[Dict], prev_action: Optional[str]
         if max_knee < 130:  # Both legs too bent for running
             proper_running_position = False
     
-    # Running: Significant alternating knees + substantial arm activity + proper position
-    if alternating_knees and arm_movement and proper_running_position:
+    # Running: Significant alternating knees + substantial arm activity + proper position + no action buffer
+    if alternating_knees and arm_movement and proper_running_position and not action_buffer_active:
         return "run"
     
     # === JUMP DETECTION ===
@@ -122,8 +181,8 @@ def classify_action_simple(angle_history: List[Dict], prev_action: Optional[str]
     # COOLDOWN: No jump detection after crouch or mountain climber
     jump_detected = False
     
-    # Add cooldown period after crouch or mountain climber
-    cooldown_active = prev_action in ["crouch", "mountain_climber"]
+    # Add cooldown period after crouch or mountain climber, or if action buffer is active
+    cooldown_active = prev_action in ["crouch", "mountain_climber"] or action_buffer_active
     
     if not cooldown_active and len(angle_history) >= 4:  # Need more frames to track movement
         # Get hip positions from previous frames
@@ -162,7 +221,7 @@ def classify_action_simple(angle_history: List[Dict], prev_action: Optional[str]
             avg_body_size = sum(body_sizes) / len(body_sizes)
             if avg_body_size > 0:
                 # Jump threshold relative to person's height (shoulder to hip distance)
-                jump_threshold = avg_body_size * 0.15  # 15% of person's torso height
+                jump_threshold = avg_body_size * 0.08  # 8% of person's torso height (lowered for easier detection)
                 is_moving_up = upward_movement > jump_threshold
             else:
                 is_moving_up = False  # Can't detect without body size reference
@@ -230,23 +289,31 @@ if __name__ == "__main__":
         }
     ]
     
-    # Example 2: Mountain climber data - using stricter thresholds
+    # Example 2: Mountain climber data - using hip movement detection
     mountain_climber_frames = [
         {
-            "left_elbow_angle": 170.0,     # Very straight arm (> 165°)
-            "right_elbow_angle": 168.0,    # Very straight arm (> 165°)
-            "left_shoulder_angle": 110.0,  # Very hunched forward (< 115°)
-            "right_shoulder_angle": 112.0, # Very hunched forward (< 115°)
-            "left_hip_angle": 160.0,
-            "right_hip_angle": 145.0,      # Hip movement (15° difference)
+            "left_elbow_angle": 165.0,     # Straight arm (> 160°)
+            "right_elbow_angle": 163.0,    # Straight arm (> 160°)
+            "left_shoulder_angle": 110.0,  # Hunched forward (< 115°)
+            "right_shoulder_angle": 112.0, # Hunched forward (< 115°)
+            "left_hip_angle": 125.0,       # One hip bent (knee to chest)
+            "right_hip_angle": 145.0,      # Other hip more open - 20° difference
         },
         {
-            "left_elbow_angle": 172.0,     # Still very straight
-            "right_elbow_angle": 166.0,    # Still very straight
-            "left_shoulder_angle": 108.0,  # Still very hunched
-            "right_shoulder_angle": 113.0, # Still very hunched
-            "left_hip_angle": 145.0,       # Hip moved (15° change - > 12°)
-            "right_hip_angle": 160.0,      # Hip moved (15° change - > 12°)
+            "left_elbow_angle": 167.0,     # Still straight arms
+            "right_elbow_angle": 161.0,    # Still straight arms
+            "left_shoulder_angle": 108.0,  # Still hunched
+            "right_shoulder_angle": 113.0, # Still hunched
+            "left_hip_angle": 135.0,       # Left hip opening (10° change)
+            "right_hip_angle": 130.0,      # Right hip closing (15° change) - alternating
+        },
+        {
+            "left_elbow_angle": 164.0,     # Still straight arms
+            "right_elbow_angle": 162.0,    # Still straight arms
+            "left_shoulder_angle": 109.0,  # Still hunched
+            "right_shoulder_angle": 111.0, # Still hunched
+            "left_hip_angle": 150.0,       # Left hip now open (alternated)
+            "right_hip_angle": 120.0,      # Right hip now bent (alternated) - 30° difference
         }
     ]
     
@@ -308,7 +375,7 @@ if __name__ == "__main__":
     run_action = classify_action_from_history(running_frames)
     jump_action = classify_action_from_history(jump_frames)
     
-    print(f"Priority 1 - Mountain climber: {climber_action}")  # Should print "mountain_climber"
-    print(f"Priority 2 - Crouch detection: {crouch_action}")    # Should print "crouch"
+    print(f"Priority 1 - Crouch detection: {crouch_action}")    # Should print "crouch"
+    print(f"Priority 2 - Mountain climber (HIP MOVEMENT): {climber_action}")  # Should print "mountain_climber"
     print(f"Priority 3 - Running detection: {run_action}")     # Should print "run"
-    print(f"Priority 4 - Jump detection (UPWARD >15% person height + cooldown): {jump_action}")  # Should print "jump" 
+    print(f"Priority 4 - Jump detection (UPWARD >8% person height + cooldown): {jump_action}")  # Should print "jump" 
