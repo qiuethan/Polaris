@@ -19,6 +19,8 @@ const Game = dynamic(() => import('@/components/Game'), {
 
 export default function GameWrapper({ onReturnToMenu }) {
   const [gameState, setGameState] = useState('playing'); // Start directly in playing state
+  
+  console.log(`🎮 GameWrapper received onReturnToMenu:`, !!onReturnToMenu, typeof onReturnToMenu);
 
   // Easy positioning parameters - Position game INSIDE the video frame
   const gameWindowPosition = {
@@ -118,7 +120,10 @@ export default function GameWrapper({ onReturnToMenu }) {
                   zIndex: 10
                 }}
               >
-                <Game containerSize={gameWindowPosition} />
+                <Game 
+                  containerSize={gameWindowPosition} 
+                  onReturnToMenu={onReturnToMenu}
+                />
               </div>
 
               {/* UI Elements - Numbers with PNGs at exact pixel positions */}

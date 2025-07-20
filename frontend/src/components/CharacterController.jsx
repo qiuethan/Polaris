@@ -26,19 +26,19 @@ export const CharacterController = ({
     ACCELERATION,
     DECELERATION
   } = useControls(
-    "Character Control",
+    "⌨️ Keyboard Character Control",
     {
-      WALK_SPEED: { value: 2.0, min: 0.5, max: 8, step: 0.1 },
-      RUN_SPEED: { value: 3.0, min: 1, max: 15, step: 0.1 },
-      JUMP_FORCE: { value: 2, min: 1, max: 15, step: 0.5 },
-      LANE_SEPARATION: { wvalue: 1, min: 0.5, max: 3, step: 0.1 },
+      WALK_SPEED: { value: 2.0, min: 0.5, max: 8, step: 0.1, label: "Walk Speed" },
+      RUN_SPEED: { value: 3.0, min: 1, max: 15, step: 0.1, label: "Run Speed" },
+      JUMP_FORCE: { value: 5, min: 1, max: 15, step: 0.5, label: "Jump Force" },
+      LANE_SEPARATION: { value: 1, min: 0.5, max: 3, step: 0.1 },
       CAMERA_DISTANCE: { value: 3, min: 1, max: 15, step: 0.5 },
       CAMERA_HEIGHT: { value: 2, min: 0.5, max: 10, step: 0.5 },
       CAMERA_LERP_SPEED: { value: 0.2, min: 0.01, max: 0.5, step: 0.01 },
       POV_MODE: { value: false, label: "First Person View" },
       GROUND_DETECTION_DISTANCE: { value: 0.7, min: 0.3, max: 2, step: 0.1, label: "Ground Detection" },
-      ACCELERATION: { value: 4, min: 1, max: 20, step: 0.5, label: "Car Acceleration" },
-      DECELERATION: { value: 3, min: 1, max: 15, step: 0.5, label: "Car Deceleration" },
+      ACCELERATION: { value: 5, min: 1, max: 20, step: 0.5, label: "Acceleration" },
+      DECELERATION: { value: 4, min: 1, max: 15, step: 0.5, label: "Deceleration" },
     }
   );
   
@@ -103,12 +103,12 @@ export const CharacterController = ({
     console.log(`🚀 [${playerId}] STAGE 1: Pure upward jump to clear obstacles`);
     rb.current.setLinvel({
       x: currentVel.x,
-      y: 13, // Reduced upward velocity by 1/6 (from 16)
+      y: 10, // Further reduced upward velocity for lower jump height
       z: Math.max(currentVel.z * 0.8, 2) // Slightly reduce forward speed to avoid wall hits
     }, true);
     
     // STAGE 2: Add forward momentum after character is airborne (150ms delay)
-    const forwardMomentum = Math.max(currentVel.z + 3, 10); // Reduced momentum by 1/6 (+3 boost, max 10)
+    const forwardMomentum = Math.max(currentVel.z + 2, 7); // Further reduced momentum (+2 boost, max 7)
     setTimeout(() => {
       if (rb.current && jumpingFlag.current) {
         const midAirVel = rb.current.linvel();
@@ -174,9 +174,9 @@ export const CharacterController = ({
         rb.current.setTranslation({
           x: laneX,
           y: 5,
-          z: -16
+          z: -15
         });
-        console.log(`Initialized ${playerId} at lane X=${laneX}`);
+        console.log(`Initialized ${playerId} at lane X=${laneX}, Z=-5`);
       }, 100);
       
       return () => clearTimeout(timer);
@@ -455,8 +455,8 @@ export const CharacterController = ({
     >
       {/* Smaller collider when crouching */}
       <CapsuleCollider 
-        args={isCrouching ? [0.2, 0.15] : [0.3, 0.2]} 
-        position={isCrouching ? [0, 0.3, 0] : [0, 0.5, 0]} 
+        args={isCrouching ? [0.22, 0.15] : [0.33, 0.2]} 
+        position={isCrouching ? [0, 0.33, 0] : [0, 0.55, 0]} 
       />
       
       <group ref={container}>
@@ -468,7 +468,7 @@ export const CharacterController = ({
         )}
         <group ref={character}>
           <Character 
-            scale={0.18} 
+            scale={0.198} 
             position-y={0.1} 
             animation={animation} 
             visible={!isControlled || !POV_MODE}

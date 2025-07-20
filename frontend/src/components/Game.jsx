@@ -40,7 +40,7 @@ export const GameState = proxy({
 });
 
 // Shared Scene Components
-function SharedScene({ playerId, usePoseControl = false, showPositionInfo = false, onGameWin, physicsDebug = false }) {
+function SharedScene({ playerId, usePoseControl = false, showPositionInfo = false, onGameWin }) {
   const { map, physicsDebug } = useControls("Map & Debug", {
     map: {
       value: "medieval_fantasy_book",
@@ -95,11 +95,7 @@ function SharedScene({ playerId, usePoseControl = false, showPositionInfo = fals
         <meshStandardMaterial color="#228B22" />
       </mesh>
       
-      {/* DEBUG: Test cube to verify 3D rendering */}
-      <mesh position={[0, 2, 0]} castShadow>
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial color="#ff0000" />
-      </mesh>
+
       
       {/* The map */}
       <Map
@@ -212,22 +208,20 @@ export default function Game({ onReturnToMenu, containerSize }) {
   const [positionInfoState, setPositionInfoState] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
+  const [controlMode, setControlMode] = useState("pose"); // Local state for control mode
   
   // Ensure component is mounted before rendering Canvas
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  const { physicsDebug, controlMode } = useControls("Map & Debug", {
+  // Control settings - Pose controls are prioritized by default
+  const { physicsDebug } = useControls("🎮 Control Settings", {
     physicsDebug: { 
       value: false,
       label: "🔧 Physics Debug"
     },
-    controlMode: {
-      value: "keyboard",
-      options: ["keyboard", "pose"],
-      label: "🎮 Control Mode"
-    }
+    // Remove the controlMode from Leva since we'll handle it with our button
   });
 
   // Also add Leva controls that sync with state
@@ -286,34 +280,10 @@ export default function Game({ onReturnToMenu, containerSize }) {
     if (isTransitioning) return;
     setIsTransitioning(true);
     
-    // Show victory for a moment before returning to menu
+    // Show victory for a moment before reloading the page
     setTimeout(() => {
-      console.log("Returning to menu...");
-      if (onReturnToMenu) {
-        onReturnToMenu();
-      }
-    }, 3000); // 3 second delay to show victory
-  };
-
-
-
-  const handleGameWin = (winnerId) => {
-    console.log(`🏆 Game won by ${winnerId}!`);
-    
-    // Update game state
-    GameState.gameStatus.isFinished = true;
-    GameState.gameStatus.winner = winnerId;
-    
-    // Prevent multiple triggers
-    if (isTransitioning) return;
-    setIsTransitioning(true);
-    
-    // Show victory for a moment before returning to menu
-    setTimeout(() => {
-      console.log("Returning to menu...");
-      if (onReturnToMenu) {
-        onReturnToMenu();
-      }
+      console.log("🔄 Reloading page to return to menu...");
+      window.location.reload();
     }, 3000); // 3 second delay to show victory
   };
 
@@ -427,20 +397,18 @@ export default function Game({ onReturnToMenu, containerSize }) {
           )}
         </div>
         
-        {/* Compact Control Mode Display */}
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black bg-opacity-70 text-white px-3 py-2 rounded-lg text-center pointer-events-none">
-          <div className="text-sm font-semibold mb-1">
-            {usePoseControl ? "🎭 POSE CONTROL" : "⌨️ KEYBOARD"}
-          </div>
-          <div className="text-xs text-gray-300">
-            {usePoseControl ? 
-              "Move your body to play!" : 
-              "Use keyboard controls"
-            }
-          </div>
-          <div className="text-xs text-gray-400 mt-1">
-            Press P for debug • I for info • H to hide
-          </div>
+        {/* Control Mode Toggle Button - Top Center */}
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-30">
+          <button
+            onClick={() => setControlMode(controlMode === "pose" ? "keyboard" : "pose")}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all duration-300 shadow-lg border-2 ${
+              controlMode === "pose" 
+                ? 'bg-purple-600 hover:bg-purple-700 text-white border-purple-400 shadow-purple-500/30' 
+                : 'bg-blue-600 hover:bg-blue-700 text-white border-blue-400 shadow-blue-500/30'
+            }`}
+          >
+            {controlMode === "pose" ? "🎭 POSE CONTROL" : "⌨️ KEYBOARD CONTROL"}
+          </button>
         </div>
         
         {/* Debug Controls Overlay */}

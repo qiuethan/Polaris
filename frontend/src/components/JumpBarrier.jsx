@@ -3,7 +3,7 @@ import { RigidBody } from "@react-three/rapier";
 import { useGLTF } from "@react-three/drei";
 
 // GLB Jump Barrier - Load 3D model
-export function JumpBarrier({ position, laneOffset = 0, color = "#8B4513", height = 0.6, width = 1.0 }) {
+export function JumpBarrier({ position, laneOffset = 0, color = "#8B4513", height = 0.6, width = 1.0, rotation = 0 }) {
   // Try to load a fence/barrier model - fallback to procedural if not found
   let model;
   try {
@@ -15,7 +15,7 @@ export function JumpBarrier({ position, laneOffset = 0, color = "#8B4513", heigh
 
   return (
     <RigidBody type="fixed" position={[position[0] + laneOffset, position[1], position[2]]}>
-      <group>
+      <group rotation={[0, rotation, 0]}>
         {model && model.scene ? (
           // Use the loaded GLB model
           <primitive 
