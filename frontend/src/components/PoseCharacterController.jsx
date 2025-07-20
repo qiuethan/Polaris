@@ -653,46 +653,7 @@ export const PoseCharacterController = ({
           <coneGeometry args={[0.1, 0.2, 4]} />
           <meshBasicMaterial color={isGrounded ? color : "#666666"} />
         </mesh>
-        
-        {/* Debug: Show grounded state and pose connection */}
-        {isControlled && (
-          <>
-            <mesh position={[0, 1.2, 0]} visible={!POV_MODE}>
-              <sphereGeometry args={[0.05]} />
-              <meshBasicMaterial color={isGrounded ? "#00ff00" : "#ff0000"} />
-            </mesh>
-            
-            {/* Pose connection indicator */}
-            <mesh position={[0, 1.4, 0]} visible={!POV_MODE}>
-              <sphereGeometry args={[0.03]} />
-              <meshBasicMaterial 
-                color={
-                  !POSE_CONTROL_ENABLED ? "#888888" :
-                  connectionStatus === "connected" ? "#00ff00" : 
-                  connectionStatus === "connecting" ? "#ffff00" : "#ff0000"
-                } 
-              />
-            </mesh>
-            
-            {/* Purple jump button - Same as keyboard version */}
-            <mesh 
-              position={[0, 1.6, 0]} 
-              visible={!POV_MODE}
-              onClick={doJump}
-            >
-              <boxGeometry args={[0.2, 0.1, 0.1]} />
-              <meshBasicMaterial color="#ff00ff" />
-            </mesh>
-          </>
-        )}
-        
-        {/* Display current pose action */}
-        {isControlled && (
-          <mesh position={[0, 1.6, 0]} visible={!POV_MODE}>
-            <planeGeometry args={[0.8, 0.3]} />
-            <meshBasicMaterial color="#000000" opacity={0.7} transparent />
-          </mesh>
-        )}
+
         
 
       </group>

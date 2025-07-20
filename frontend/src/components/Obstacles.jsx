@@ -178,7 +178,7 @@ export function ObstacleCourse({ onGameWin }) {
                 position={[obstacle.position[0], obstacle.position[1] - 0.4, obstacle.position[2]]}
                 laneOffset={obstacle.laneOffset}
                 color="#FF6B35"
-                height={1.5}
+                height={1.8}
                 width={0.8}
                 rotation={Math.PI}
               />

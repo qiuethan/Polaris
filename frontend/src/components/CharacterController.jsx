@@ -482,29 +482,7 @@ export const CharacterController = ({
           <meshBasicMaterial color={isGrounded ? color : "#666666"} />
         </mesh>
         
-        {/* Debug: Show grounded state and jump status */}
-        {isControlled && (
-          <>
-            <mesh position={[0, 1.2, 0]} visible={!POV_MODE}>
-              <sphereGeometry args={[0.05]} />
-              <meshBasicMaterial color={isGrounded ? "#00ff00" : "#ff0000"} />
-            </mesh>
-            {/* Jump cooldown indicator */}
-            <mesh position={[0, 1.4, 0]} visible={!POV_MODE}>
-              <sphereGeometry args={[0.03]} />
-              <meshBasicMaterial color={jumpCooldown.current > 0 ? "#ffff00" : "#ffffff"} />
-            </mesh>
-                         {/* Manual jump button for debugging */}
-             <mesh 
-               position={[0, 1.6, 0]} 
-               visible={!POV_MODE}
-               onClick={doJump}
-             >
-               <boxGeometry args={[0.2, 0.1, 0.1]} />
-               <meshBasicMaterial color="#ff00ff" />
-             </mesh>
-          </>
-        )}
+
       </group>
     </RigidBody>
   );
