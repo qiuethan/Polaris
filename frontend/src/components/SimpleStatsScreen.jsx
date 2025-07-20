@@ -28,13 +28,21 @@ const CombinedLineChart = ({ datasets, title }) => {
       <h4 className="text-lg font-bold mb-2">{title}</h4>
       
       {/* Legend */}
-      <div className="flex justify-center gap-4 mb-3">
+      <div className="flex justify-center gap-4 mb-3 flex-wrap">
         {datasets.map((dataset, index) => (
           <div key={index} className="flex items-center gap-2">
-            <div 
-              className="w-4 h-0.5 rounded"
-              style={{ backgroundColor: dataset.color }}
-            />
+            <svg width="20" height="6" className="flex-shrink-0">
+              <line
+                x1="0"
+                y1="3"
+                x2="20"
+                y2="3"
+                stroke={dataset.color}
+                strokeWidth="2"
+                strokeDasharray={dataset.dashPattern || "none"}
+                strokeLinecap="round"
+              />
+            </svg>
             <span className="text-sm font-medium">{dataset.label}</span>
           </div>
         ))}
@@ -73,6 +81,7 @@ const CombinedLineChart = ({ datasets, title }) => {
                     stroke={dataset.color}
                     strokeWidth="3"
                     strokeLinecap="round"
+                    strokeDasharray={dataset.dashPattern || "none"}
                   />
                 )}
                 
@@ -117,40 +126,54 @@ export const SimpleStatsScreen = ({ winner }) => {
       console.log('🏆 Stats Screen - Data loaded:', {
         player1: { 
           calories: player1Stats.calories, 
-          power: player1Stats.power, 
+          distance: player1Stats.distance, 
+          cadence: player1Stats.cadence,
           movements: player1Stats.movementHistory?.length || 0 
         },
         player2: { 
           calories: player2Stats.calories, 
-          power: player2Stats.power, 
+          distance: player2Stats.distance, 
+          cadence: player2Stats.cadence,
           movements: player2Stats.movementHistory?.length || 0 
         }
       });
     }
   }, [player1Stats.isLoaded, player2Stats.isLoaded, player1Stats.calories, player2Stats.calories]);
 
-  // Prepare chart data
-  const player1ChartData = player1Stats.movementHistory.map((movement, index) => ({
+  // Prepare chart data for calories, distance, and cadence
+  const player1CaloriesData = player1Stats.movementHistory.map((movement, index) => ({
     index,
     value: movement.totalCalories,
     timestamp: movement.timestamp
   }));
 
-  const player2ChartData = player2Stats.movementHistory.map((movement, index) => ({
+  const player2CaloriesData = player2Stats.movementHistory.map((movement, index) => ({
     index,
     value: movement.totalCalories,
     timestamp: movement.timestamp
   }));
 
-  const player1PowerData = player1Stats.movementHistory.map((movement, index) => ({
+  const player1DistanceData = player1Stats.movementHistory.map((movement, index) => ({
     index,
-    value: movement.totalPower,
+    value: movement.totalDistance || 0,
     timestamp: movement.timestamp
   }));
 
-  const player2PowerData = player2Stats.movementHistory.map((movement, index) => ({
+  const player2DistanceData = player2Stats.movementHistory.map((movement, index) => ({
     index,
-    value: movement.totalPower,
+    value: movement.totalDistance || 0,
+    timestamp: movement.timestamp
+  }));
+
+  const player1CadenceData = player1Stats.movementHistory.map((movement, index) => ({
+    index,
+    value: movement.totalCadence || 0,
+    timestamp: movement.timestamp
+  }));
+
+  const player2CadenceData = player2Stats.movementHistory.map((movement, index) => ({
+    index,
+    value: movement.totalCadence || 0,
     timestamp: movement.timestamp
   }));
 
@@ -182,7 +205,7 @@ export const SimpleStatsScreen = ({ winner }) => {
           {/* Player 1 Stats */}
           <div className="bg-blue-50 p-4 rounded-lg border-2 border-blue-200">
             <h3 className="text-lg font-bold text-blue-800 mb-3">🔵 Player 1</h3>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div className="text-center">
                 <div className="text-2xl mb-1">🔥</div>
                 <div className="text-xl font-bold text-red-600">
@@ -191,11 +214,18 @@ export const SimpleStatsScreen = ({ winner }) => {
                 <div className="text-sm text-gray-600">Calories</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl mb-1">⚡</div>
-                <div className="text-xl font-bold text-yellow-600">
-                  {player1Stats.power.toFixed(0)}
+                <div className="text-2xl mb-1">📏</div>
+                <div className="text-xl font-bold text-blue-600">
+                  {(player1Stats.distance || 0).toFixed(1)}m
                 </div>
-                <div className="text-sm text-gray-600">Power</div>
+                <div className="text-sm text-gray-600">Distance</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl mb-1">⏱️</div>
+                <div className="text-xl font-bold text-green-600">
+                  {player1Stats.cadence || 0}/min
+                </div>
+                <div className="text-sm text-gray-600">Cadence</div>
               </div>
             </div>
           </div>
@@ -203,7 +233,7 @@ export const SimpleStatsScreen = ({ winner }) => {
           {/* Player 2 Stats */}
           <div className="bg-red-50 p-4 rounded-lg border-2 border-red-200">
             <h3 className="text-lg font-bold text-red-800 mb-3">🔴 Player 2</h3>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div className="text-center">
                 <div className="text-2xl mb-1">🔥</div>
                 <div className="text-xl font-bold text-red-600">
@@ -212,11 +242,18 @@ export const SimpleStatsScreen = ({ winner }) => {
                 <div className="text-sm text-gray-600">Calories</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl mb-1">⚡</div>
-                <div className="text-xl font-bold text-yellow-600">
-                  {player2Stats.power.toFixed(0)}
+                <div className="text-2xl mb-1">📏</div>
+                <div className="text-xl font-bold text-blue-600">
+                  {(player2Stats.distance || 0).toFixed(1)}m
                 </div>
-                <div className="text-sm text-gray-600">Power</div>
+                <div className="text-sm text-gray-600">Distance</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl mb-1">⏱️</div>
+                <div className="text-xl font-bold text-green-600">
+                  {player2Stats.cadence || 0}/min
+                </div>
+                <div className="text-sm text-gray-600">Cadence</div>
               </div>
             </div>
           </div>
@@ -224,7 +261,7 @@ export const SimpleStatsScreen = ({ winner }) => {
           {/* Total Stats */}
           <div className="bg-gray-50 p-4 rounded-lg border-2 border-gray-200">
             <h3 className="text-lg font-bold text-gray-800 mb-3">📊 Combined Total</h3>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div className="text-center">
                 <div className="text-2xl mb-1">🔥</div>
                 <div className="text-xl font-bold text-red-600">
@@ -233,45 +270,63 @@ export const SimpleStatsScreen = ({ winner }) => {
                 <div className="text-sm text-gray-600">Total Calories</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl mb-1">⚡</div>
-                <div className="text-xl font-bold text-yellow-600">
-                  {(player1Stats.power + player2Stats.power).toFixed(0)}
+                <div className="text-2xl mb-1">📏</div>
+                <div className="text-xl font-bold text-blue-600">
+                  {((player1Stats.distance || 0) + (player2Stats.distance || 0)).toFixed(1)}m
                 </div>
-                <div className="text-sm text-gray-600">Total Power</div>
+                <div className="text-sm text-gray-600">Total Distance</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl mb-1">⏱️</div>
+                <div className="text-xl font-bold text-green-600">
+                  {Math.round(((player1Stats.cadence || 0) + (player2Stats.cadence || 0)) / 2)}/min
+                </div>
+                <div className="text-sm text-gray-600">Avg Cadence</div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Combined Line Charts */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        {/* Combined Chart with All Metrics for Both Players */}
+        <div className="grid grid-cols-1 gap-6 mb-8">
           <CombinedLineChart 
-            title="🔥 Calories Burned Over Time"
+            title="📈 Player Performance Comparison"
             datasets={[
               {
-                data: player1ChartData,
+                data: player1CaloriesData,
                 color: "#3b82f6",
-                label: "🔵 Player 1"
+                label: "🔵 Player 1 - Calories",
+                dashPattern: "none"
               },
               {
-                data: player2ChartData,
-                color: "#ef4444", 
-                label: "🔴 Player 2"
-              }
-            ]}
-          />
-          <CombinedLineChart 
-            title="⚡ Power Output Over Time"
-            datasets={[
-              {
-                data: player1PowerData,
-                color: "#3b82f6",
-                label: "🔵 Player 1"
-              },
-              {
-                data: player2PowerData,
+                data: player2CaloriesData,
                 color: "#ef4444",
-                label: "🔴 Player 2"
+                label: "🔴 Player 2 - Calories",
+                dashPattern: "none"
+              },
+              {
+                data: player1DistanceData,
+                color: "#3b82f6", 
+                label: "🔵 Player 1 - Distance",
+                dashPattern: "8,4"
+              },
+              {
+                data: player2DistanceData,
+                color: "#ef4444",
+                label: "🔴 Player 2 - Distance",
+                dashPattern: "8,4"
+              },
+              {
+                data: player1CadenceData,
+                color: "#3b82f6",
+                label: "🔵 Player 1 - Cadence",
+                dashPattern: "4,2"
+              },
+              {
+                data: player2CadenceData,
+                color: "#ef4444",
+                label: "🔴 Player 2 - Cadence",
+                dashPattern: "4,2"
               }
             ]}
           />

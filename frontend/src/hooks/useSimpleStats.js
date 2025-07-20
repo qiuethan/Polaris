@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 
-// Simple stats hook - calories, power, and movement history per player
+// Simple stats hook - calories, distance, cadence, and movement history per player
 export const useSimpleStats = (playerId = 'player1') => {
   const [calories, setCalories] = useState(0);
-  const [power, setPower] = useState(0);
+  const [distance, setDistance] = useState(0);
+  const [cadence, setCadence] = useState(0);
   const [movementHistory, setMovementHistory] = useState([]);
   const [isLoaded, setIsLoaded] = useState(false); // Track if data has been loaded from localStorage
 
@@ -17,14 +18,15 @@ export const useSimpleStats = (playerId = 'player1') => {
         const allStats = JSON.parse(savedStats);
         console.log(`📊 [${playerId}] Parsed stats:`, allStats);
         
-        const playerStats = allStats[playerId] || { calories: 0, power: 0, movements: [] };
+        const playerStats = allStats[playerId] || { calories: 0, distance: 0, cadence: 0, movements: [] };
         console.log(`📊 [${playerId}] Player specific stats:`, playerStats);
         
         setCalories(playerStats.calories);
-        setPower(playerStats.power);
+        setDistance(playerStats.distance);
+        setCadence(playerStats.cadence);
         setMovementHistory(playerStats.movements || []);
         
-        console.log(`📊 [${playerId}] Stats loaded - Calories: ${playerStats.calories}, Power: ${playerStats.power}, Movements: ${playerStats.movements?.length || 0}`);
+        console.log(`📊 [${playerId}] Stats loaded - Calories: ${playerStats.calories}, Distance: ${playerStats.distance}, Cadence: ${playerStats.cadence}, Movements: ${playerStats.movements?.length || 0}`);
       } catch (error) {
         console.error(`❌ [${playerId}] Error loading stats:`, error);
       }
@@ -54,61 +56,69 @@ export const useSimpleStats = (playerId = 'player1') => {
       allStats = {};
     }
     
-    allStats[playerId] = { calories, power, movements: movementHistory };
+    allStats[playerId] = { calories, distance, cadence, movements: movementHistory };
     const dataToSave = JSON.stringify(allStats);
     localStorage.setItem('gameStats', dataToSave);
     
-    console.log(`💾 [${playerId}] Stats saved - Calories: ${calories}, Power: ${power}, Movements: ${movementHistory.length}`);
-  }, [calories, power, movementHistory, playerId, isLoaded]);
+    console.log(`💾 [${playerId}] Stats saved - Calories: ${calories}, Distance: ${distance}, Cadence: ${cadence}, Movements: ${movementHistory.length}`);
+  }, [calories, distance, cadence, movementHistory, playerId, isLoaded]);
 
-  // Add movement with calories and power values
+  // Add movement with calories, distance, and cadence
   const addMovement = (movementType) => {
     let caloriesGained = 0;
-    let powerGained = 0;
+    let distanceGained = 0;
 
     switch (movementType) {
       case 'jump':
         caloriesGained = 0.5;
-        powerGained = 200;
+        distanceGained = 1.5; // meters forward + upward
         break;
       case 'crouch':
         caloriesGained = 0.25;
-        powerGained = 100;
+        distanceGained = 0.5; // slight forward movement
         break;
       case 'run':
         caloriesGained = 0.35;
-        powerGained = 150;
+        distanceGained = 2.0; // meters per step
         break;
       default:
         caloriesGained = 0.1;
-        powerGained = 50;
+        distanceGained = 0.8; // default movement
     }
 
     const timestamp = Date.now();
     const newCalories = calories + caloriesGained;
-    const newPower = power + powerGained;
+    const newDistance = distance + distanceGained;
+
+    // Calculate cadence (movements per minute) based on recent activity
+    const oneMinuteAgo = timestamp - 60000;
+    const recentMovements = [...movementHistory, { timestamp }].filter(m => m.timestamp > oneMinuteAgo);
+    const newCadence = recentMovements.length;
 
     // Add to movement history for line chart
     const movementEntry = {
       timestamp,
       movementType,
       caloriesGained,
-      powerGained,
+      distanceGained,
       totalCalories: newCalories,
-      totalPower: newPower
+      totalDistance: newDistance,
+      totalCadence: newCadence
     };
 
     setCalories(newCalories);
-    setPower(newPower);
+    setDistance(newDistance);
+    setCadence(newCadence);
     setMovementHistory(prev => [...prev, movementEntry]);
     
-    console.log(`🔥 [${playerId}] Movement added: ${movementType} (+${caloriesGained} cal, +${powerGained} power) - Total: ${newCalories} cal, ${newPower} power`);
+    console.log(`🔥 [${playerId}] Movement added: ${movementType} (+${caloriesGained} cal, +${distanceGained}m) - Total: ${newCalories} cal, ${newDistance.toFixed(1)}m, ${newCadence} cadence`);
   };
 
   // Reset stats for this player
   const resetStats = () => {
     setCalories(0);
-    setPower(0);
+    setDistance(0);
+    setCadence(0);
     setMovementHistory([]);
     setIsLoaded(true); // Keep loaded state to allow saving
   };
@@ -116,7 +126,8 @@ export const useSimpleStats = (playerId = 'player1') => {
   // Reset all stats for all players
   const resetAllStats = () => {
     setCalories(0);
-    setPower(0);
+    setDistance(0);
+    setCadence(0);
     setMovementHistory([]);
     setIsLoaded(true); // Keep loaded state to allow saving
     localStorage.removeItem('gameStats');
@@ -124,7 +135,8 @@ export const useSimpleStats = (playerId = 'player1') => {
 
   return {
     calories,
-    power,
+    distance,
+    cadence,
     movementHistory,
     isLoaded,
     addMovement,
