@@ -7,12 +7,14 @@ import { useEffect, useRef, useState } from "react";
 import { MathUtils, Vector3 } from "three";
 import { Character } from "./Character";
 import { GameState } from "./Game";
+import { useSimpleStats } from "../hooks/useSimpleStats";
 
 export const CharacterController = ({ 
   playerId, 
   isControlled, 
   color = "#ffffff"
 }) => {
+  const { addMovement } = useSimpleStats(playerId);
   const { 
     WALK_SPEED, 
     RUN_SPEED, 
@@ -51,6 +53,8 @@ export const CharacterController = ({
   const [animation, setAnimation] = useState("idle");
   const [isGrounded, setIsGrounded] = useState(false);
   const [isCrouching, setIsCrouching] = useState(false);
+  const [prevCrouching, setPrevCrouching] = useState(false);
+  const [prevRunning, setPrevRunning] = useState(false);
   
   const cameraWorldPosition = useRef(new Vector3());
   const cameraLookAtWorldPosition = useRef(new Vector3());
@@ -141,6 +145,11 @@ export const CharacterController = ({
     }, 300); // 300ms - ensures both stages of jump are protected
     
     console.log(`✅ [${playerId}] Jump complete - should be moving upward!`);
+    
+    // Track jump movement
+    if (isControlled) {
+      addMovement('jump');
+    }
   };
 
   // Make doJump available globally for debugging
@@ -293,8 +302,15 @@ export const CharacterController = ({
         }
       }
       
-      // Apply useful speed boost when crouching (momentum for obstacles)
-      const finalSpeed = currentSpeed.current * (crouch ? 1.4 : 1); // 40% speed boost when crouching for obstacle navigation
+      // Apply speed modifier when crouching (slower for better control)
+      const finalSpeed = currentSpeed.current * (crouch ? 0.7 : 1); // 50% slower when crouching for better control
+      
+      // Track run movement
+      const isRunning = run && (forward || backward) && Math.abs(finalSpeed) > 1.5;
+      if (isControlled && isRunning && !prevRunning) {
+        addMovement('run');
+      }
+      setPrevRunning(isRunning);
       
       // Debug car movement more frequently to see it working
       if (isControlled && (forward || backward || Math.abs(currentSpeed.current) > 0.1)) {
@@ -303,17 +319,24 @@ export const CharacterController = ({
       }
 
       // Update crouching state
-      setIsCrouching(crouch && isGrounded);
+      const newCrouchState = crouch && isGrounded;
+      setIsCrouching(newCrouchState);
+      
+      // Track crouch movement
+      if (isControlled && newCrouchState && !prevCrouching) {
+        addMovement('crouch');
+      }
+      setPrevCrouching(newCrouchState);
       
       // PERSISTENT CROUCH MOVEMENT - Auto scoot forward while crouching
       if (crouch && isGrounded) {
-        // Add automatic forward movement while crouching (useful crawling speed)
-        const crouchSpeed = 1.5; // Useful crawling speed for obstacle navigation
+        // Add automatic forward movement while crouching (slower crawling speed)
+        const crouchSpeed = 0.75; // Slower crawling speed (50% of original)
         currentSpeed.current = Math.max(currentSpeed.current, crouchSpeed);
         
         // Cap maximum speed when crouching to prevent it from being too fast
-        if (currentSpeed.current > 4.0) {
-          currentSpeed.current = 4.0; // Reasonable max crouch speed cap
+        if (currentSpeed.current > 2.0) {
+          currentSpeed.current = 2.0; // Lower max crouch speed cap (50% of original)
         }
       }
       

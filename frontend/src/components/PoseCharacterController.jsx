@@ -9,12 +9,14 @@ import { GameState } from "./Game";
 import { usePoseWebSocket } from "../api/usePoseWebSocket";
 import { getPlayer, isPlayerDoing } from "../api/poseUtils";
 import { Html, useKeyboardControls } from "@react-three/drei";
+import { useSimpleStats } from "../hooks/useSimpleStats";
 
 export const PoseCharacterController = ({ 
   playerId, 
   isControlled, 
   color = "#ffffff"
 }) => {
+  const { addMovement } = useSimpleStats(playerId);
   const { 
     WALK_SPEED, 
     RUN_SPEED, 
@@ -57,6 +59,7 @@ export const PoseCharacterController = ({
   const [isCrouching, setIsCrouching] = useState(false);
   const [leftArmAction, setLeftArmAction] = useState(null);
   const [rightArmAction, setRightArmAction] = useState(null);
+  const [prevPoseAction, setPrevPoseAction] = useState(null);
   
   const cameraWorldPosition = useRef(new Vector3());
   const cameraLookAtWorldPosition = useRef(new Vector3());
@@ -67,7 +70,6 @@ export const PoseCharacterController = ({
   const actionCooldown = useRef(0);
   const jumpingFlag = useRef(false); // Prevent movement logic from overriding jump
   const [poseJumpTrigger, setPoseJumpTrigger] = useState(0); // State-based jump trigger
-  const [prevPoseAction, setPrevPoseAction] = useState(null); // Track previous action for transitions
   
   // Keyboard controls for fallback
   const [, get] = useKeyboardControls();
@@ -335,6 +337,25 @@ export const PoseCharacterController = ({
     // DEBUG: Log the resulting movement input
     console.log(`[${playerId}] Action "${action}" → Movement input:`, result);
     
+    // Track pose movements when they change
+    if (isControlled && action && action !== prevPoseAction) {
+      switch (action) {
+        case "jump":
+          addMovement('jump');
+          break;
+        case "crouch":
+          addMovement('crouch');
+          break;
+        case "run":
+          addMovement('run');
+          break;
+        case "mountain_climber":
+          addMovement('run'); // Treat as run for stats
+          break;
+      }
+      setPrevPoseAction(action);
+    }
+    
     return result;
   };
 
@@ -462,8 +483,8 @@ export const PoseCharacterController = ({
         }
       }
       
-      // Apply useful speed boost when crouching (momentum for obstacles)
-      const finalSpeed = currentSpeed.current * (crouch ? 1.4 : 1); // 40% speed boost when crouching for obstacle navigation
+      // Apply speed modifier when crouching (slower for better control)
+      const finalSpeed = currentSpeed.current * (crouch ? 0.7 : 1); // 50% slower when crouching for better control
       
               // Debug car movement for pose
         if (isControlled && (forward || backward || Math.abs(currentSpeed.current) > 0.1)) {
@@ -476,13 +497,13 @@ export const PoseCharacterController = ({
       
       // PERSISTENT CROUCH MOVEMENT - Auto scoot forward while crouching
       if (crouch && isGrounded) {
-        // Add automatic forward movement while crouching (useful crawling speed)
-        const crouchSpeed = 1.5; // Useful crawling speed for obstacle navigation
+        // Add automatic forward movement while crouching (slower crawling speed)
+        const crouchSpeed = 0.75; // Slower crawling speed (50% of original)
         currentSpeed.current = Math.max(currentSpeed.current, crouchSpeed);
         
         // Cap maximum speed when crouching to prevent it from being too fast
-        if (currentSpeed.current > 4.0) {
-          currentSpeed.current = 4.0; // Reasonable max crouch speed cap
+        if (currentSpeed.current > 2.0) {
+          currentSpeed.current = 2.0; // Lower max crouch speed cap (50% of original)
         }
       }
 

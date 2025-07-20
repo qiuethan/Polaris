@@ -3,6 +3,7 @@
 
 import { useState } from 'react';
 import dynamic from 'next/dynamic';
+import SimpleStatsScreen from './SimpleStatsScreen';
 
 // Dynamically import the Game component ONLY when needed
 const Game = dynamic(() => import('@/components/Game'), {
@@ -19,6 +20,7 @@ const Game = dynamic(() => import('@/components/Game'), {
 
 export default function GameWrapper({ onReturnToMenu }) {
   const [gameState, setGameState] = useState('playing'); // Start directly in playing state
+  const [winner, setWinner] = useState(null);
   
   console.log(`🎮 GameWrapper received onReturnToMenu:`, !!onReturnToMenu, typeof onReturnToMenu);
 
@@ -56,6 +58,16 @@ export default function GameWrapper({ onReturnToMenu }) {
   const pauseGame = () => {
     setGameState('paused');
   };
+
+  const handleGameWin = (winnerPlayer) => {
+    setWinner(winnerPlayer);
+    setGameState('finished');
+  };
+
+  // Show stats screen when game is finished
+  if (gameState === 'finished') {
+    return <SimpleStatsScreen winner={winner} />;
+  }
 
   return (
     <div className="relative w-full h-screen overflow-hidden">
@@ -123,6 +135,7 @@ export default function GameWrapper({ onReturnToMenu }) {
                 <Game 
                   containerSize={gameWindowPosition} 
                   onReturnToMenu={onReturnToMenu}
+                  onGameWin={handleGameWin}
                 />
               </div>
 

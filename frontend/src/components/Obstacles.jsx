@@ -56,15 +56,13 @@ export function ObstacleCourse({ onGameWin }) {
     setGameEnded(true);
     setWinner(playerId);
     
-    // Callback to end the game and return to menu (page will reload)
-    setTimeout(() => {
-      console.log(`🎮 Calling onGameWin with ${playerId}...`);
-      if (onGameWin) {
-        onGameWin(playerId);
-      } else {
-        console.error("❌ onGameWin callback not available!");
-      }
-    }, 1500); // Slightly longer delay to show victory effect
+    // Immediately call onGameWin to show stats screen
+    console.log(`🎮 Calling onGameWin with ${playerId}...`);
+    if (onGameWin) {
+      onGameWin(playerId);
+    } else {
+      console.error("❌ onGameWin callback not available!");
+    }
   };
   
   // Generate obstacle positions with better variety including ramps

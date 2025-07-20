@@ -202,7 +202,7 @@ function PlayerLabel({ playerId, usePoseControl }) {
   );
 }
 
-export default function Game({ onReturnToMenu, containerSize }) {
+export default function Game({ onReturnToMenu, containerSize, onGameWin }) {
   // Local state for debug toggles
   const [poseDebugState, setPoseDebugState] = useState(false);
   const [positionInfoState, setPositionInfoState] = useState(false);
@@ -280,11 +280,14 @@ export default function Game({ onReturnToMenu, containerSize }) {
     if (isTransitioning) return;
     setIsTransitioning(true);
     
-    // Show victory for a moment before reloading the page
-    setTimeout(() => {
-      console.log("🔄 Reloading page to return to menu...");
+    // Pass through to parent immediately - no delay
+    console.log("🔄 Showing stats screen...");
+    if (onGameWin) {
+      onGameWin(winnerId);
+    } else {
+      console.log("🔄 No onGameWin callback, reloading page...");
       window.location.reload();
-    }, 3000); // 3 second delay to show victory
+    }
   };
 
   // Don't render until mounted
@@ -448,19 +451,7 @@ export default function Game({ onReturnToMenu, containerSize }) {
           </button>
         </div>
         
-        {/* Victory Overlay */}
-        {GameState.gameStatus.isFinished && GameState.gameStatus.winner && (
-          <div className="absolute inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-            <div className="text-center">
-              <div className={`text-8xl font-bold mb-4 ${GameState.gameStatus.winner === 'player1' ? 'text-blue-500' : 'text-red-500'}`}>
-                🏆 {GameState.gameStatus.winner === 'player1' ? 'PLAYER 1' : 'PLAYER 2'} WINS! 🏆
-              </div>
-              <div className="text-2xl text-white">
-                Returning to menu...
-              </div>
-            </div>
-          </div>
-        )}
+
       </div>
     </PoseWebSocketProvider>
   );
