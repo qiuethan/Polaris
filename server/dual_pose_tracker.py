@@ -473,11 +473,11 @@ class DualPoseTracker:
         print("🎯 ACTION DETECTION (Priority Order):")
         print("   🧗 MOUNTAIN CLIMBER: Arms > 165° + Shoulders < 115° + Hip movement > 12°")
         print("   🦵 CROUCH: Both knees bent < 110°")
-        print("   🏃 RUN: Alternating knees (20° diff) + Arm movement > 10° + Running stance [RELAXED]")
-        print("   🦘 JUMP: UPWARD movement >8% person height + Cooldown after crouch/climber [MORE SENSITIVE]")
+        print("   🏃 RUN: Alternating knees (15° diff) + Arm movement > 10° + Running stance [RELAXED]")
+        print("   🦘 JUMP: UPWARD movement >12% person height + Cooldown after crouch/climber [MORE SENSITIVE]")
         print("⚡ Instant response with SENSITIVE detection!")
         print("📝 REP COUNTING: Each action automatically counted and logged!")
-        print("🔄 Action buffering: Crouch 0.25s | Mountain climber 0.07s | Run INSTANT | Jump 0.1s")
+        print("🔄 Action buffering: Crouch 0.25s | Mountain climber 0.07s | Run INSTANT | Jump INSTANT")
         
         try:
             consecutive_failures = 0
