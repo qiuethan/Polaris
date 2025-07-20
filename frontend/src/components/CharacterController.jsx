@@ -28,10 +28,10 @@ export const CharacterController = ({
   } = useControls(
     "Character Control",
     {
-      WALK_SPEED: { value: 3.0, min: 0.5, max: 8, step: 0.1 },
-      RUN_SPEED: { value: 6.0, min: 1, max: 15, step: 0.1 },
-      JUMP_FORCE: { value: 8, min: 3, max: 15, step: 0.5 },
-      LANE_SEPARATION: { value: 1, min: 0.5, max: 3, step: 0.1 },
+      WALK_SPEED: { value: 2.0, min: 0.5, max: 8, step: 0.1 },
+      RUN_SPEED: { value: 3.0, min: 1, max: 15, step: 0.1 },
+      JUMP_FORCE: { value: 2, min: 1, max: 15, step: 0.5 },
+      LANE_SEPARATION: { wvalue: 1, min: 0.5, max: 3, step: 0.1 },
       CAMERA_DISTANCE: { value: 3, min: 1, max: 15, step: 0.5 },
       CAMERA_HEIGHT: { value: 2, min: 0.5, max: 10, step: 0.5 },
       CAMERA_LERP_SPEED: { value: 0.2, min: 0.01, max: 0.5, step: 0.01 },
@@ -72,7 +72,6 @@ export const CharacterController = ({
     deceleration.current = DECELERATION;
   }, [ACCELERATION, DECELERATION]);
   
-  // Smooth and realistic jump function
   const doJump = () => {
     const caller = new Error().stack?.split('\n')[2]?.trim() || 'unknown';
     console.log(`🚀 [${playerId}] doJump called from: ${caller}`);
@@ -84,16 +83,14 @@ export const CharacterController = ({
     
     // Additional safety check for purple button
     if (jumpCooldown.current > 0) {
-      console.log(`❌ [${playerId}] Purple button blocked - still cooling down: ${jumpCooldown.current.toFixed(2)}s`);
+      console.log(`❌ [${playerId}] Jump blocked - still cooling down: ${jumpCooldown.current.toFixed(2)}s`);
       return;
     }
     
     if (!isGrounded) {
-      console.log(`❌ [${playerId}] Purple button blocked - not grounded`);
+      console.log(`❌ [${playerId}] Jump blocked - not grounded`);
       return;
     }
-    
-    console.log(`🚀 [${playerId}] POWER JUMPING! Setting Y velocity to 22, Z momentum: ${forwardMomentum}`);
     
     // Get current state
     const currentVel = rb.current.linvel();
@@ -102,31 +99,50 @@ export const CharacterController = ({
     // Set jumping flag to prevent movement logic from overriding
     jumpingFlag.current = true;
     
-    // Strong upward velocity with significant forward momentum
-    const forwardMomentum = Math.max(currentVel.z + 8, 20); // Add 8 to current speed or boost to 20 for obstacle clearance
+    // STAGE 1: Apply only upward velocity first (no forward momentum to avoid wall collision)
+    console.log(`🚀 [${playerId}] STAGE 1: Pure upward jump to clear obstacles`);
     rb.current.setLinvel({
       x: currentVel.x,
-      y: 22, // Higher jump force for better obstacle clearance
-      z: forwardMomentum // Enhanced forward momentum to clear obstacles
+      y: 13, // Reduced upward velocity by 1/6 (from 16)
+      z: Math.max(currentVel.z * 0.8, 2) // Slightly reduce forward speed to avoid wall hits
     }, true);
     
-    // Verify velocity was set
+    // STAGE 2: Add forward momentum after character is airborne (150ms delay)
+    const forwardMomentum = Math.max(currentVel.z + 3, 10); // Reduced momentum by 1/6 (+3 boost, max 10)
+    setTimeout(() => {
+      if (rb.current && jumpingFlag.current) {
+        const midAirVel = rb.current.linvel();
+        // Only apply forward momentum if character is still going up or at peak (y > 0)
+        if (midAirVel.y > -2) { // Small tolerance for peak detection
+          console.log(`🚀 [${playerId}] STAGE 2: Adding forward momentum at peak - Z: ${forwardMomentum}, Y: ${midAirVel.y.toFixed(1)}`);
+          rb.current.setLinvel({
+            x: midAirVel.x,
+            y: midAirVel.y, // Keep current Y velocity
+            z: forwardMomentum // Apply forward momentum when safely airborne
+          }, true);
+        } else {
+          console.log(`⏬ [${playerId}] STAGE 2 SKIPPED: Character already falling (Y: ${midAirVel.y.toFixed(1)})`);
+        }
+      }
+    }, 150); // 150ms delay to ensure character is airborne
+    
+    // Verify initial velocity was set
     const newVel = rb.current.linvel();
-    console.log(`✅ [${playerId}] New velocity after setLinvel:`, newVel);
+    console.log(`✅ [${playerId}] Stage 1 velocity set:`, newVel);
     
     setAnimation("jump");
     jumpCooldown.current = 1.0; // 1 second cooldown to prevent double jumping
     setIsGrounded(false);
     
-    // Clear jumping flag after a short delay (shorter than cooldown)
+    // Clear jumping flag after the full jump sequence is complete
     setTimeout(() => {
       jumpingFlag.current = false;
-      console.log(`🕐 [${playerId}] Jumping flag cleared`);
-    }, 200); // 200ms - protects jump but allows new ones after cooldown
+      console.log(`🕐 [${playerId}] Jumping flag cleared - jump sequence complete`);
+    }, 300); // 300ms - ensures both stages of jump are protected
     
     console.log(`✅ [${playerId}] Jump complete - should be moving upward!`);
   };
-  
+
   // Make doJump available globally for debugging
   if (isControlled && typeof window !== 'undefined') {
     window[`doJump_${playerId}`] = doJump;
@@ -158,7 +174,7 @@ export const CharacterController = ({
         rb.current.setTranslation({
           x: laneX,
           y: 5,
-          z: -10
+          z: -16
         });
         console.log(`Initialized ${playerId} at lane X=${laneX}`);
       }, 100);
