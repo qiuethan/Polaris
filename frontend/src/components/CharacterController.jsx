@@ -28,10 +28,10 @@ export const CharacterController = ({
   } = useControls(
     "Character Control",
     {
-      WALK_SPEED: { value: 3.0, min: 0.5, max: 8, step: 0.1 },
-      RUN_SPEED: { value: 6.0, min: 1, max: 15, step: 0.1 },
-      JUMP_FORCE: { value: 8, min: 3, max: 15, step: 0.5 },
-      LANE_SEPARATION: { value: 1, min: 0.5, max: 3, step: 0.1 },
+      WALK_SPEED: { value: 2.0, min: 0.5, max: 8, step: 0.1 },
+      RUN_SPEED: { value: 3.0, min: 1, max: 15, step: 0.1 },
+      JUMP_FORCE: { value: 2, min: 1, max: 15, step: 0.5 },
+      LANE_SEPARATION: { wvalue: 1, min: 0.5, max: 3, step: 0.1 },
       CAMERA_DISTANCE: { value: 3, min: 1, max: 15, step: 0.5 },
       CAMERA_HEIGHT: { value: 2, min: 0.5, max: 10, step: 0.5 },
       CAMERA_LERP_SPEED: { value: 0.2, min: 0.01, max: 0.5, step: 0.01 },
@@ -72,7 +72,6 @@ export const CharacterController = ({
     deceleration.current = DECELERATION;
   }, [ACCELERATION, DECELERATION]);
   
-  // Smooth and realistic jump function
   const doJump = () => {
     const caller = new Error().stack?.split('\n')[2]?.trim() || 'unknown';
     console.log(`🚀 [${playerId}] doJump called from: ${caller}`);
@@ -84,16 +83,14 @@ export const CharacterController = ({
     
     // Additional safety check for purple button
     if (jumpCooldown.current > 0) {
-      console.log(`❌ [${playerId}] Purple button blocked - still cooling down: ${jumpCooldown.current.toFixed(2)}s`);
+      console.log(`❌ [${playerId}] Jump blocked - still cooling down: ${jumpCooldown.current.toFixed(2)}s`);
       return;
     }
     
     if (!isGrounded) {
-      console.log(`❌ [${playerId}] Purple button blocked - not grounded`);
+      console.log(`❌ [${playerId}] Jump blocked - not grounded`);
       return;
     }
-    
-    console.log(`🚀 [${playerId}] POWER JUMPING! Setting Y velocity to 22, Z momentum: ${forwardMomentum}`);
     
     // Get current state
     const currentVel = rb.current.linvel();
@@ -103,7 +100,10 @@ export const CharacterController = ({
     jumpingFlag.current = true;
     
     // Strong upward velocity with significant forward momentum
-    const forwardMomentum = Math.max(currentVel.z + 8, 20); // Add 8 to current speed or boost to 20 for obstacle clearance
+    const forwardMomentum = Math.max(currentVel.z + 8, 20); // MOVED THIS BEFORE THE CONSOLE.LOG
+    
+    console.log(`🚀 [${playerId}] POWER JUMPING! Setting Y velocity to 22, Z momentum: ${forwardMomentum}`);
+    
     rb.current.setLinvel({
       x: currentVel.x,
       y: 22, // Higher jump force for better obstacle clearance
@@ -126,7 +126,7 @@ export const CharacterController = ({
     
     console.log(`✅ [${playerId}] Jump complete - should be moving upward!`);
   };
-  
+
   // Make doJump available globally for debugging
   if (isControlled && typeof window !== 'undefined') {
     window[`doJump_${playerId}`] = doJump;
@@ -158,7 +158,7 @@ export const CharacterController = ({
         rb.current.setTranslation({
           x: laneX,
           y: 5,
-          z: -10
+          z: -16
         });
         console.log(`Initialized ${playerId} at lane X=${laneX}`);
       }, 100);

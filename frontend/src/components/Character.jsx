@@ -334,7 +334,7 @@ export function Character({ animation = "idle", color = "#ffffff", isCrouching =
   });
   
   return (
-    <group ref={group} {...props} scale={0.3}> {/* Made 50% bigger! */}
+    <group ref={group} {...props} scale={0.2}> {/* Made 50% bigger! */}
       
       {/* Main Body - Fluffy and round */}
       <group ref={bodyRef}>

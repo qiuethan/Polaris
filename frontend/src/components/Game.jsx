@@ -4,7 +4,7 @@
 import { KeyboardControls, Environment } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import { Physics, RigidBody } from "@react-three/rapier";
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { Vector3 } from "three";
 import { proxy } from "valtio";
 import { useControls } from "leva";
@@ -17,7 +17,6 @@ import { Minimap, maps } from "./Minimap";
 import { DualLaneSystem } from "./DualLaneSystem";
 import { PositionDisplay } from "./PositionDisplay";
 import { ObstacleCourse } from "./Obstacles";
-
 
 // Create game state
 export const GameState = proxy({
@@ -32,10 +31,15 @@ export const GameState = proxy({
     rotation: 0,
     pathProgress: 0.1,
   },
+  gameStatus: {
+    isFinished: false,
+    winner: null,
+    raceStartTime: null,
+  },
 });
 
 // Shared Scene Components
-function SharedScene({ playerId, usePoseControl = false }) {
+function SharedScene({ playerId, usePoseControl = false, onGameWin }) {
   const { map, physicsDebug } = useControls("Map & Debug", {
     map: {
       value: "medieval_fantasy_book",
@@ -52,7 +56,10 @@ function SharedScene({ playerId, usePoseControl = false }) {
     // Reset player path progress when map changes
     GameState.player1.pathProgress = 0;
     GameState.player2.pathProgress = 0.1;
-    console.log("Map changed to:", map, "- Resetting player path progress");
+    // Reset game status
+    GameState.gameStatus.isFinished = false;
+    GameState.gameStatus.winner = null;
+    console.log("Map changed to:", map, "- Resetting player path progress and game status");
   }, [map]);
   
   const CharacterComponent = usePoseControl ? PoseCharacterController : CharacterController;
@@ -99,8 +106,9 @@ function SharedScene({ playerId, usePoseControl = false }) {
         isControlled={playerId === "player2"}
         color="#ef4444"
       />
-      <ObstacleCourse />
-
+      
+      {/* Obstacle Course with proper game end handling */}
+      <ObstacleCourse onGameWin={onGameWin} />
       
       {/* Lane markers for reference - extend both ways, closer together */}
       <mesh position={[-0.5, 0.1, 0]}>
@@ -136,11 +144,19 @@ const unifiedKeyboardMap = [
   { name: "p2_crouch", keys: ["Slash"] },
 ];
 
-export default function Game({ containerSize }) {
+export default function Game({ containerSize, onReturnToMenu }) {
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+  
+  // Ensure component is mounted before rendering Canvas
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+  
   const { physicsDebug, controlMode, showPoseDebug } = useControls("Map & Debug", {
     physicsDebug: { value: false },
     controlMode: {
-      value: "pose",
+      value: "keyboard",
       options: ["keyboard", "pose"],
       label: "Control Mode"
     },
@@ -152,10 +168,35 @@ export default function Game({ containerSize }) {
 
   const usePoseControl = controlMode === "pose";
 
+  const handleGameWin = (winnerId) => {
+    console.log(`🏆 Game won by ${winnerId}!`);
+    
+    // Update game state
+    GameState.gameStatus.isFinished = true;
+    GameState.gameStatus.winner = winnerId;
+    
+    // Prevent multiple triggers
+    if (isTransitioning) return;
+    setIsTransitioning(true);
+    
+    // Show victory for a moment before returning to menu
+    setTimeout(() => {
+      console.log("Returning to menu...");
+      if (onReturnToMenu) {
+        onReturnToMenu();
+      }
+    }, 3000); // 3 second delay to show victory
+  };
+
+  // Don't render until mounted
+  if (!isMounted) {
+    return <div className="w-full h-full bg-black flex items-center justify-center text-white">Loading...</div>;
+  }
+
   return (
     <PoseWebSocketProvider>
       <div 
-        className="flex bg-black"
+        className="flex bg-black relative"
         style={containerSize ? {
           width: containerSize.width,
           height: containerSize.height,
@@ -168,21 +209,26 @@ export default function Game({ containerSize }) {
       >
         {/* Player 1 View - Left Side */}
         <div className="relative w-1/2 h-full">
-          <KeyboardControls map={unifiedKeyboardMap}>
-            <Canvas
-              shadows
-              camera={{ position: [2, 1.5, -2], near: 0.01, fov: 60 }}
-              gl={{ antialias: true }}
-              style={{ width: '100%', height: '100%' }}
-              resize={{ scroll: false, debounce: { scroll: 0, resize: 0 } }}
-            >
+          <Canvas
+            shadows
+            camera={{ position: [2, 1.5, -2], near: 0.01, fov: 60 }}
+            gl={{ antialias: true }}
+            style={{ width: '100%', height: '100%' }}
+            resize={{ scroll: false, debounce: { scroll: 0, resize: 0 } }}
+            key="player1-canvas"
+          >
+            <KeyboardControls map={unifiedKeyboardMap}>
               <Suspense fallback={null}>
                 <Physics debug={physicsDebug} gravity={[0, -30, 0]}>
-                  <SharedScene playerId="player1" usePoseControl={usePoseControl} />
+                  <SharedScene 
+                    playerId="player1" 
+                    usePoseControl={usePoseControl} 
+                    onGameWin={handleGameWin}
+                  />
                 </Physics>
               </Suspense>
-            </Canvas>
-          </KeyboardControls>
+            </KeyboardControls>
+          </Canvas>
           
           {/* Player 1 Minimap */}
           <div className="absolute w-48 h-48 top-4 left-4 shadow-2xl border-2 border-white rounded-lg overflow-hidden">
@@ -210,21 +256,26 @@ export default function Game({ containerSize }) {
 
         {/* Player 2 View - Right Side */}
         <div className="relative w-1/2 h-full">
-          <KeyboardControls map={unifiedKeyboardMap}>
-            <Canvas
-              shadows
-              camera={{ position: [2, 1.5, -2], near: 0.01, fov: 60 }}
-              gl={{ antialias: true }}
-              style={{ width: '100%', height: '100%' }}
-              resize={{ scroll: false, debounce: { scroll: 0, resize: 0 } }}
-            >
+          <Canvas
+            shadows
+            camera={{ position: [2, 1.5, -2], near: 0.01, fov: 60 }}
+            gl={{ antialias: true }}
+            style={{ width: '100%', height: '100%' }}
+            resize={{ scroll: false, debounce: { scroll: 0, resize: 0 } }}
+            key="player2-canvas"
+          >
+            <KeyboardControls map={unifiedKeyboardMap}>
               <Suspense fallback={null}>
                 <Physics debug={physicsDebug} gravity={[0, -30, 0]}>
-                  <SharedScene playerId="player2" usePoseControl={usePoseControl} />
+                  <SharedScene 
+                    playerId="player2" 
+                    usePoseControl={usePoseControl} 
+                    onGameWin={handleGameWin}
+                  />
                 </Physics>
               </Suspense>
-            </Canvas>
-          </KeyboardControls>
+            </KeyboardControls>
+          </Canvas>
           
           {/* Player 2 Minimap */}
           <div className="absolute w-48 h-48 top-4 right-4 shadow-2xl border-2 border-white rounded-lg overflow-hidden">
@@ -267,7 +318,24 @@ export default function Game({ containerSize }) {
               Forward • Backward • Run • Jump • Crouch
             </div>
           )}
+          <div className="text-xs text-yellow-400 mt-2">
+            🏃‍♂️ Jump | 🦆 Duck | 🔺 Ramp
+          </div>
         </div>
+        
+        {/* Victory Overlay */}
+        {GameState.gameStatus.isFinished && GameState.gameStatus.winner && (
+          <div className="absolute inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+            <div className="text-center">
+              <div className={`text-8xl font-bold mb-4 ${GameState.gameStatus.winner === 'player1' ? 'text-blue-500' : 'text-red-500'}`}>
+                🏆 {GameState.gameStatus.winner === 'player1' ? 'PLAYER 1' : 'PLAYER 2'} WINS! 🏆
+              </div>
+              <div className="text-2xl text-white">
+                Returning to menu...
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </PoseWebSocketProvider>
   );
