@@ -4,6 +4,7 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 
 export function Character({ animation = "idle", color = "#ffffff", isCrouching = false, leftArmAction = null, rightArmAction = null, ...props }) {
+  console.log(`🐻 Character rendering: animation=${animation}, color=${color}, crouching=${isCrouching}`);
   const group = useRef();
   const bodyRef = useRef();
   const headRef = useRef();

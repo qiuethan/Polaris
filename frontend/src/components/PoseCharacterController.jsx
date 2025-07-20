@@ -8,7 +8,7 @@ import { Character } from "./Character";
 import { GameState } from "./Game";
 import { usePoseWebSocket } from "../api/usePoseWebSocket";
 import { getPlayer, isPlayerDoing } from "../api/poseUtils";
-import { Html } from "@react-three/drei";
+import { Html, useKeyboardControls } from "@react-three/drei";
 
 export const PoseCharacterController = ({ 
   playerId, 
@@ -31,9 +31,9 @@ export const PoseCharacterController = ({
   } = useControls(
     "Pose Character Control",
     {
-      WALK_SPEED: { value: 3.0, min: 0.5, max: 8, step: 0.1 },
-      RUN_SPEED: { value: 6.0, min: 1, max: 15, step: 0.1 },
-      JUMP_FORCE: { value: 8, min: 3, max: 15, step: 0.5 },
+      WALK_SPEED: { value: 1.5, min: 0.5, max: 8, step: 0.1 },
+      RUN_SPEED: { value: 2.5, min: 1, max: 15, step: 0.1 },
+      JUMP_FORCE: { value: 6, min: 3, max: 15, step: 0.5 },
       LANE_SEPARATION: { value: 1, min: 0.5, max: 3, step: 0.1 },
       CAMERA_DISTANCE: { value: 3, min: 1, max: 15, step: 0.5 },
       CAMERA_HEIGHT: { value: 2, min: 0.5, max: 10, step: 0.5 },
@@ -41,8 +41,8 @@ export const PoseCharacterController = ({
       POV_MODE: { value: false, label: "First Person View" },
       GROUND_DETECTION_DISTANCE: { value: 0.7, min: 0.3, max: 2, step: 0.1, label: "Ground Detection" },
       POSE_CONTROL_ENABLED: { value: true, label: "Enable Pose Control" },
-      ACCELERATION: { value: 8, min: 1, max: 20, step: 0.5, label: "Car Acceleration" },
-      DECELERATION: { value: 6, min: 1, max: 15, step: 0.5, label: "Car Deceleration" },
+      ACCELERATION: { value: 4, min: 1, max: 20, step: 0.5, label: "Car Acceleration" },
+      DECELERATION: { value: 3, min: 1, max: 15, step: 0.5, label: "Car Deceleration" },
     }
   );
   
@@ -69,10 +69,13 @@ export const PoseCharacterController = ({
   const [poseJumpTrigger, setPoseJumpTrigger] = useState(0); // State-based jump trigger
   const [prevPoseAction, setPrevPoseAction] = useState(null); // Track previous action for transitions
   
+  // Keyboard controls for fallback
+  const [, get] = useKeyboardControls();
+  
   // Car-like movement variables
   const currentSpeed = useRef(0); // Current forward/backward speed
-  const acceleration = useRef(8); // How fast to accelerate
-  const deceleration = useRef(6); // How fast to decelerate when no input
+  const acceleration = useRef(4); // How fast to accelerate
+  const deceleration = useRef(3); // How fast to decelerate when no input
   
   // Update acceleration/deceleration from Leva controls
   useEffect(() => {
@@ -393,7 +396,7 @@ export const PoseCharacterController = ({
       } else {
         // DEBUG: Log why pose control isn't being used
         if (isControlled) {
-          console.log(`[${playerId}] Not using pose control:`, {
+          console.log(`[${playerId}] Not using pose control - fallback to keyboard:`, {
             hasPoseInput: !!poseInput,
             POSE_CONTROL_ENABLED,
             hasPlayerData: !!playerData,
@@ -401,7 +404,23 @@ export const PoseCharacterController = ({
           });
         }
         
-        // No pose input - reset everything
+        // FALLBACK TO KEYBOARD CONTROLS when pose data not available
+        // This ensures characters are still controllable when WebSocket disconnects
+        const playerPrefix = playerId === "player1" ? "p1_" : "p2_";
+        
+        // Get keyboard input as fallback
+        forward = get()[playerPrefix + "forward"] || false;
+        backward = get()[playerPrefix + "backward"] || false;
+        run = get()[playerPrefix + "run"] || false;
+        jump = get()[playerPrefix + "jump"] || false;
+        crouch = get()[playerPrefix + "crouch"] || false;
+        
+        // Log keyboard fallback when keys are pressed
+        if (isControlled && (forward || backward || run || jump || crouch)) {
+          console.log(`[${playerId}] Using keyboard fallback:`, {
+            forward, backward, run, jump, crouch
+          });
+        }
         setIsCrouching(false);
       }
       

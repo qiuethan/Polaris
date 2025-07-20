@@ -158,7 +158,7 @@ import {
         <Gltf
           scale={maps[map].scale}
           position={maps[map].position}
-          src={`models/${map}.glb`}
+          src={`/models/${map}.glb`}
         />
       </>
     );

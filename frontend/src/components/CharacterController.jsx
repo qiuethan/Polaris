@@ -28,17 +28,17 @@ export const CharacterController = ({
   } = useControls(
     "Character Control",
     {
-      WALK_SPEED: { value: 2.0, min: 0.5, max: 8, step: 0.1 },
-      RUN_SPEED: { value: 3.0, min: 1, max: 15, step: 0.1 },
-      JUMP_FORCE: { value: 2, min: 1, max: 15, step: 0.5 },
-      LANE_SEPARATION: { wvalue: 1, min: 0.5, max: 3, step: 0.1 },
+      WALK_SPEED: { value: 1.5, min: 0.5, max: 8, step: 0.1 },
+      RUN_SPEED: { value: 2.5, min: 1, max: 15, step: 0.1 },
+      JUMP_FORCE: { value: 6, min: 1, max: 15, step: 0.5 },
+      LANE_SEPARATION: { value: 1, min: 0.5, max: 3, step: 0.1 },
       CAMERA_DISTANCE: { value: 3, min: 1, max: 15, step: 0.5 },
       CAMERA_HEIGHT: { value: 2, min: 0.5, max: 10, step: 0.5 },
       CAMERA_LERP_SPEED: { value: 0.2, min: 0.01, max: 0.5, step: 0.01 },
       POV_MODE: { value: false, label: "First Person View" },
       GROUND_DETECTION_DISTANCE: { value: 0.7, min: 0.3, max: 2, step: 0.1, label: "Ground Detection" },
-      ACCELERATION: { value: 8, min: 1, max: 20, step: 0.5, label: "Car Acceleration" },
-      DECELERATION: { value: 6, min: 1, max: 15, step: 0.5, label: "Car Deceleration" },
+      ACCELERATION: { value: 4, min: 1, max: 20, step: 0.5, label: "Car Acceleration" },
+      DECELERATION: { value: 3, min: 1, max: 15, step: 0.5, label: "Car Deceleration" },
     }
   );
   
@@ -63,8 +63,8 @@ export const CharacterController = ({
   
   // Car-like movement variables
   const currentSpeed = useRef(0); // Current forward/backward speed
-  const acceleration = useRef(20); // How fast to accelerate
-  const deceleration = useRef(15); // How fast to decelerate when no input
+  const acceleration = useRef(4); // How fast to accelerate
+  const deceleration = useRef(3); // How fast to decelerate when no input
   
   // Update acceleration/deceleration from Leva controls
   useEffect(() => {

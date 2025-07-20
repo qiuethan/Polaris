@@ -40,10 +40,9 @@ export const GameState = proxy({
 });
 
 // Shared Scene Components
-function SharedScene({ playerId, usePoseControl = false, showPositionInfo = false, onGameWin }) {
+function SharedScene({ playerId, usePoseControl = false, showPositionInfo = false, onGameWin, physicsDebug = false }) {
   // Use shared game state instead of duplicate controls
   const map = "medieval_fantasy_book"; // Default map
-  const physicsDebug = false; // Will be controlled by main Game component
   
   useEffect(() => {
     GameState.map = map;
@@ -82,11 +81,23 @@ function SharedScene({ playerId, usePoseControl = false, showPositionInfo = fals
       {/* Ambient light to brighten everything */}
       <ambientLight intensity={0.5} />
       
+      {/* Ground plane for basic reference */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1, 0]} receiveShadow>
+        <planeGeometry args={[100, 100]} />
+        <meshStandardMaterial color="#228B22" />
+      </mesh>
+      
+      {/* DEBUG: Test cube to verify 3D rendering */}
+      <mesh position={[0, 2, 0]} castShadow>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color="#ff0000" />
+      </mesh>
+      
       {/* The map */}
       <Map
         scale={maps[map].scale}
         position={maps[map].position}
-        model={`models/${map}.glb`}
+        model={`/models/${map}.glb`}
       />
       
       {/* Characters - using the selected control method */}
@@ -101,8 +112,8 @@ function SharedScene({ playerId, usePoseControl = false, showPositionInfo = fals
         color="#ef4444"
       />
       
-              {/* Obstacle Course with proper game end handling */}
-        <ObstacleCourse onGameWin={onGameWin} />
+              {/* Obstacle Course with proper game end handling - TEMPORARILY DISABLED FOR DEBUG */}
+        {/* <ObstacleCourse onGameWin={onGameWin} /> */}
       
       {/* Lane markers for reference - extend both ways, closer together */}
       <mesh position={[-0.5, 0.1, 0]}>
@@ -199,7 +210,7 @@ export default function Game({ onReturnToMenu, containerSize }) {
       label: "🔧 Physics Debug"
     },
     controlMode: {
-      value: "keyboard",
+      value: "pose",
       options: ["keyboard", "pose"],
       label: "🎮 Control Mode"
     }
@@ -351,6 +362,7 @@ export default function Game({ onReturnToMenu, containerSize }) {
                     usePoseControl={usePoseControl} 
                     showPositionInfo={showPositionInfo}
                     onGameWin={handleGameWin}
+                    physicsDebug={physicsDebug}
                   />
                 </Physics>
               </Suspense>
