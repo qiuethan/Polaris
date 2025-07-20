@@ -41,8 +41,16 @@ export const GameState = proxy({
 
 // Shared Scene Components
 function SharedScene({ playerId, usePoseControl = false, showPositionInfo = false, onGameWin, physicsDebug = false }) {
-  // Use shared game state instead of duplicate controls
-  const map = "medieval_fantasy_book"; // Default map
+  const { map, physicsDebug } = useControls("Map & Debug", {
+    map: {
+      value: "medieval_fantasy_book",
+      options: Object.keys(maps),
+    },
+    physicsDebug: {
+      value: false,
+      label: "Show Physics Debug"
+    },
+  });
   
   useEffect(() => {
     GameState.map = map;
@@ -112,8 +120,8 @@ function SharedScene({ playerId, usePoseControl = false, showPositionInfo = fals
         color="#ef4444"
       />
       
-              {/* Obstacle Course with proper game end handling - TEMPORARILY DISABLED FOR DEBUG */}
-        {/* <ObstacleCourse onGameWin={onGameWin} /> */}
+      {/* Obstacle Course with proper game end handling */}
+      <ObstacleCourse onGameWin={onGameWin} />
       
       {/* Lane markers for reference - extend both ways, closer together */}
       <mesh position={[-0.5, 0.1, 0]}>
@@ -203,6 +211,12 @@ export default function Game({ onReturnToMenu, containerSize }) {
   const [poseDebugState, setPoseDebugState] = useState(false);
   const [positionInfoState, setPositionInfoState] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+  
+  // Ensure component is mounted before rendering Canvas
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const { physicsDebug, controlMode } = useControls("Map & Debug", {
     physicsDebug: { 
@@ -210,7 +224,7 @@ export default function Game({ onReturnToMenu, containerSize }) {
       label: "🔧 Physics Debug"
     },
     controlMode: {
-      value: "pose",
+      value: "keyboard",
       options: ["keyboard", "pose"],
       label: "🎮 Control Mode"
     }
@@ -282,6 +296,31 @@ export default function Game({ onReturnToMenu, containerSize }) {
   };
 
 
+
+  const handleGameWin = (winnerId) => {
+    console.log(`🏆 Game won by ${winnerId}!`);
+    
+    // Update game state
+    GameState.gameStatus.isFinished = true;
+    GameState.gameStatus.winner = winnerId;
+    
+    // Prevent multiple triggers
+    if (isTransitioning) return;
+    setIsTransitioning(true);
+    
+    // Show victory for a moment before returning to menu
+    setTimeout(() => {
+      console.log("Returning to menu...");
+      if (onReturnToMenu) {
+        onReturnToMenu();
+      }
+    }, 3000); // 3 second delay to show victory
+  };
+
+  // Don't render until mounted
+  if (!isMounted) {
+    return <div className="w-full h-full bg-black flex items-center justify-center text-white">Loading...</div>;
+  }
 
   return (
     <PoseWebSocketProvider>
