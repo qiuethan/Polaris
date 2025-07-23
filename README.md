@@ -5,7 +5,7 @@ Polaris is a web-based multiplayer fitness platformer that turns your **body** i
 > Think **Xbox Kinect**, but rebuilt with modern machine learning and a fresh, web-native stack.
 
 🏆 **1st Place – Best Game Hack @ Hack the 6ix 2024**  
-🎖 **Finalist – Overall Top 10**
+🎖 **Finalist – Overall Top 8**
 
 ---
 
