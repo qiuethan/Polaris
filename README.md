@@ -27,7 +27,6 @@ Polaris combines motion tracking, gesture recognition, and real-time multiplayer
 | ML Pose Recognition | Mediapipe + Custom Gesture Logic |
 | Multiplayer Backend | FastAPI + WebSockets |
 | Frontend Game Engine | React + Three.js |
-| Deployment | Vercel (frontend), Render (backend) |
 
 ---
 
